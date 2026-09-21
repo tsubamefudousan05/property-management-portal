@@ -107,49 +107,21 @@ def parse_fixed_date(val):
   return None
 
 
-# 部署の項目の中に「未入力（未）」が1つでもあれば False（未完了）を返す関数
-def is_department_completed(row, dep_name, schema_list):
-  if dep_name == "すべて（総合）":
-    dep_schemas = schema_list
-  else:
-    dep_schemas = [s for s in schema_list if s["department"] == dep_name or s["department"] == "総合"]
-    
-  for s in dep_schemas:
-    val = row.get(s["title"], "")
-    if val is None or str(val).strip() in ["", "-", "未選択", "None", "nan", "未"]:
-      return False
-  return True
-
-
 if mode == "📋 一覧表示・管理":
   if data:
-    st.markdown("### 🔍 表示・編集フィルター選択")
+    st.markdown("### 🔍 部署フィルター選択")
     
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-      filter_dep = st.selectbox(
-          "📂 部署フィルター",
-          ["すべて（総合）", "1課", "2課"],
-          key="filter_dep_select"
-      )
-    with col_f2:
-      filter_status = st.selectbox(
-          "📌 進捗フィルター",
-          ["すべて", "未入力のみ表示"],
-          key="filter_status_select"
-      )
+    # 部署フィルター
+    filter_dep = st.selectbox(
+        "📂 表示する部署を選択",
+        ["すべて（総合）", "1課", "2課"],
+        key="filter_dep_select"
+    )
 
-    # フィルター適用ロジック
+    # 部署に応じたデータ絞り込み
     filtered_data = []
     for row in data:
-      match_status = True
-      if filter_status == "未入力のみ表示":
-        completed = is_department_completed(row, filter_dep, schema)
-        if completed:  # 全部埋まっていればリストから除外
-          match_status = False
-
-      if match_status:
-        filtered_data.append(row)
+      filtered_data.append(row)
 
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
@@ -171,9 +143,10 @@ if mode == "📋 一覧表示・管理":
 
         df_display = pd.DataFrame(display_data)
 
+        # 🌟 「未」のセルをダークモードに映える黄色系（背景：濃い黄色、文字：黒）にハイライト
         def highlight_mi(val):
           if str(val).strip() == "未":
-            return "background-color: #ffcccc; color: #990000;"
+            return "background-color: #fff3cd; color: #856404;"
           return ""
 
         try:
