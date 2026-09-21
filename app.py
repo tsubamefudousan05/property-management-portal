@@ -228,7 +228,6 @@ if mode == "📋 引き継ぎ書・管理":
           key="filter_dep_select_hiki"
       )
 
-    # 🌟 ここも完全徹底チェック済み
     if filter_dep != "すべて（総合）":
       target_schema = [s for s in schema if s.get("department", "") == filter_dep or s.get("department", "") == "総合"]
     else:
@@ -398,7 +397,6 @@ elif mode == "🏁 管理終了案件":
   schema = response_data.get("schema", [])
   data = response_data.get("data", [])
 
-  st.subheader("🏁 管理終了案件 管理モード")
   if data:
     def get_kanryo_sort_key(row):
       d = parse_fixed_date(row.get("終了日", "")) or parse_fixed_date(row.get("終了予定日", ""))
@@ -421,20 +419,49 @@ elif mode == "🏁 管理終了案件":
       prop_options.append(label)
       prop_map[label] = row
 
-    col_s1, col_s2 = st.columns([4, 6])
-    with col_s1:
-      selected_label = st.selectbox("🏠 管理終了物件を選択", prop_options, key="select_kanryo")
+    # 🌟 左右に分割（左：セレクトボックス、右：対象データ一覧）
+    col_selectors, col_table = st.columns([4, 6])
+
+    with col_selectors:
+      st.markdown("### 🔍 検索・選択")
+      selected_label = st.selectbox(
+          "🏠 管理終了物件を選択",
+          prop_options,
+          key="select_kanryo"
+      )
+
+    with col_table:
+      st.markdown(f"### 📊 管理終了案件一覧（全 {len(data)} 件）")
+      
+      display_kanryo_data = []
+      for row in data:
+        new_row = row.copy()
+        for k, v in new_row.items():
+          if "日" in k and v:
+            fixed_date = parse_fixed_date(v)
+            if fixed_date:
+              new_row[k] = fixed_date.strftime("%Y/%m/%d")
+          if k != "_rowId" and (v is None or str(v).strip() in ["", "-", "未選択", "None", "nan"]):
+            new_row[k] = "未"
+        display_kanryo_data.append(new_row)
+
+      df_kanryo = pd.DataFrame(display_kanryo_data)
+      st.dataframe(df_kanryo, use_container_width=True, height=250, hide_index=True)
+
+    st.markdown("---")
 
     if selected_label != "未選択（物件を選んでください）":
       target_row = prop_map[selected_label]
       row_id = target_row["_rowId"]
       p_name = get_safe_property_name(target_row)
 
-      with col_s2:
-        st.markdown(f"**選択中**: {p_name} (行番号: {row_id})")
-        save_btn = st.button("💾 管理終了データを保存", type="primary", key="save_kanryo")
+      head_col1, head_col3 = st.columns([4, 1])
+      with head_col1:
+        st.subheader(f"✏️ 選択中：{p_name} （行番号 {row_id}）")
+      with head_col3:
+        save_btn = st.button("💾 管理終了データを保存", type="primary", use_container_width=True, key="save_kanryo")
 
-      with st.container(height=500):
+      with st.container(height=600):
         edited_payload = {}
         grouped = {}
         for s in schema:
@@ -489,7 +516,6 @@ elif mode == "🔄 オーナーチェンジ案件":
   schema = response_data.get("schema", [])
   data = response_data.get("data", [])
 
-  st.subheader("🔄 オーナーチェンジ案件 管理モード")
   if data:
     def get_oc_sort_key(row):
       d = parse_fixed_date(row.get("決済日", ""))
@@ -510,20 +536,49 @@ elif mode == "🔄 オーナーチェンジ案件":
       prop_options.append(label)
       prop_map[label] = row
 
-    col_s1, col_s2 = st.columns([4, 6])
-    with col_s1:
-      selected_label = st.selectbox("🏠 オーナーチェンジ物件を選択", prop_options, key="select_oc")
+    # 🌟 左右に分割（左：セレクトボックス、右：対象データ一覧）
+    col_selectors, col_table = st.columns([4, 6])
+
+    with col_selectors:
+      st.markdown("### 🔍 検索・選択")
+      selected_label = st.selectbox(
+          "🏠 オーナーチェンジ物件を選択",
+          prop_options,
+          key="select_oc"
+      )
+
+    with col_table:
+      st.markdown(f"### 📊 オーナーチェンジ案件一覧（全 {len(data)} 件）")
+      
+      display_oc_data = []
+      for row in data:
+        new_row = row.copy()
+        for k, v in new_row.items():
+          if "日" in k and v:
+            fixed_date = parse_fixed_date(v)
+            if fixed_date:
+              new_row[k] = fixed_date.strftime("%Y/%m/%d")
+          if k != "_rowId" and (v is None or str(v).strip() in ["", "-", "未選択", "None", "nan"]):
+            new_row[k] = "未"
+        display_oc_data.append(new_row)
+
+      df_oc = pd.DataFrame(display_oc_data)
+      st.dataframe(df_oc, use_container_width=True, height=250, hide_index=True)
+
+    st.markdown("---")
 
     if selected_label != "未選択（物件を選んでください）":
       target_row = prop_map[selected_label]
       row_id = target_row["_rowId"]
       p_name = get_safe_property_name(target_row)
 
-      with col_s2:
-        st.markdown(f"**選択中**: {p_name} (行番号: {row_id})")
-        save_btn = st.button("💾 オーナーチェンジデータを保存", type="primary", key="save_oc")
+      head_col1, head_col3 = st.columns([4, 1])
+      with head_col1:
+        st.subheader(f"✏️ 選択中：{p_name} （行番号 {row_id}）")
+      with head_col3:
+        save_btn = st.button("💾 オーナーチェンジデータを保存", type="primary", use_container_width=True, key="save_oc")
 
-      with st.container(height=500):
+      with st.container(height=600):
         edited_payload = {}
         grouped = {}
         for s in schema:
