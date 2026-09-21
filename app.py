@@ -143,10 +143,10 @@ if mode == "📋 一覧表示・管理":
 
         df_display = pd.DataFrame(display_data)
 
-        # 🌟 「未」のセルをダークモードに映える黄色系（背景：濃い黄色、文字：黒）にハイライト
+        # 🌟 ダークモードで見やすい配色（背景：暗い黄土色、文字：明るい黄色）に修正
         def highlight_mi(val):
           if str(val).strip() == "未":
-            return "background-color: #fff3cd; color: #856404;"
+            return "background-color: #594500; color: #ffeb3b;"
           return ""
 
         try:
