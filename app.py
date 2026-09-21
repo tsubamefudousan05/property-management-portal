@@ -187,7 +187,6 @@ if mode == "📋 一覧表示・管理":
     for row in data:
       filtered_data.append(row)
 
-    # 🌟 ここも完璧に正常なカッコに修正済み
     if filter_dep != "すべて（総合）":
       target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
     else:
@@ -395,7 +394,6 @@ elif mode == "➕ 新規物件追加":
       key="add_dep_radio",
   )
 
-  # 🌟 ここも完璧に修正済み
   target_schema = [
       s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
   ]
@@ -428,10 +426,11 @@ elif mode == "➕ 新規物件追加":
           with label_col:
             st.markdown(f"**{title}**")
           with status_col:
+            # 🌟 新規追加時はデフォルトで「未」（index=0）からスタートするように修正
             status_choice = st.radio(
                 f"状態_add_{unique_key}",
                 ["未", "済"],
-                index=1,
+                index=0,
                 horizontal=True,
                 key=f"status_add_{unique_key}",
                 label_visibility="collapsed"
