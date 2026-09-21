@@ -62,9 +62,10 @@ with col_reload:
         st.cache_data.clear()
         st.rerun()
 
+# 🌟 必要な3つのモードだけに絞り込み
 mode = st.radio(
     "操作モード",
-    ["📋 引き継ぎ書・管理", "🏁 管理終了案件", "🔄 オーナーチェンジ案件", "➕ 新規物件追加（全体）", "⚙️ 部署別・進捗ステータスビュー"],
+    ["📋 引き継ぎ書・管理", "🏁 管理終了案件", "🔄 オーナーチェンジ案件"],
     horizontal=True,
 )
 
@@ -133,7 +134,6 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
         st.markdown("以下の内容で変更を保存します。内容を確認してください。")
     st.markdown("---")
     
-    # 🌟 勝手に「済」に置き換える迷惑な処理を削除し、入力された値をそのまま保持する
     validated_payload = {}
     for k, v in edited_payload.items():
         if v is None or str(v).strip() == "":
@@ -874,7 +874,6 @@ elif mode == "🔄 オーナーチェンジ案件":
           with f_cols[i % 4]:
             label_col, status_col = st.columns([2, 1])
             with label_col:
-              # 🌟 未判定：黄色、済判定：水色に変更
               is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
               if is_mi_form:
                 st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
@@ -920,19 +919,3 @@ elif mode == "🔄 オーナーチェンジ案件":
         show_confirm_dialog(p_name, row_id, edited_payload, target_row, "オーナーチェンジ", is_new=False)
   else:
     st.info("👆 上のセレクトボックスからオーナーチェンジ物件を選択、または新規追加を選択してください。")
-
-
-# ==========================================
-# ➕ 新規物件追加（全体）
-# ==========================================
-elif mode == "➕ 新規物件追加（全体）":
-  st.subheader("➕ 新規物件の追加登録（全体モード）")
-  st.info("※個別のシート（管理終了・オーナーチェンジなど）のセレクトボックスからも直接新規追加ができるようになりました。")
-
-
-# ==========================================
-# ⚙️ 部署別・進捗ステータスビュー
-# ==========================================
-elif mode == "⚙️ 部署別・進捗ステータスビュー":
-  st.subheader("⚙️ 部署別・進捗ステータス確認モード")
-  st.info("※サイドの機能は一覧画面に統合されました。")
