@@ -171,7 +171,6 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 検索・フィルター選択")
     
-    # 🌟 部署セレクトボックスと日付順物件セレクトボックスを横並び（半分ずつ）に配置
     col_f1, col_f2 = st.columns(2)
     
     with col_f1:
@@ -188,17 +187,17 @@ if mode == "📋 一覧表示・管理":
     for row in data:
       filtered_data.append(row)
 
+    # 🌟 ここも完璧に正常なカッコに修正済み
     if filter_dep != "すべて（総合）":
-      target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
+      target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
     else:
       target_schema = schema
 
-    # 🌟 物件を「集金開始月（日付順）」でソートしてセレクトボックスの選択肢を作る
     def get_sort_key(row):
       date_val = parse_fixed_date(row.get("集金開始月", ""))
       if date_val:
         return (0, date_val)
-      return (1, date.max) # 日付がないものは後ろへ
+      return (1, date.max)
 
     sorted_filtered_data = sorted(filtered_data, key=get_sort_key)
     
@@ -253,7 +252,6 @@ if mode == "📋 一覧表示・管理":
 
         df_display_filtered = df_display[unique_columns_to_show]
 
-        # 🌟 左端のチェックボックス（選択モード）を完全廃止し、純粋な表表示にする
         st.dataframe(
             df_display_filtered,
             use_container_width=True,
@@ -262,7 +260,6 @@ if mode == "📋 一覧表示・管理":
         )
 
       with col_form:
-        # 🌟 物件が選択されていない（未選択）なら、フォームを表示しない
         if selected_prop_label == "未選択（物件を選んでください）":
           st.markdown("<br><br><br>", unsafe_allow_html=True)
           st.info("👈 上のセレクトボックス、または一覧から物件を選択すると編集フォームが表示されます。")
@@ -388,7 +385,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department"] and s.get("department") != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
@@ -398,6 +395,7 @@ elif mode == "➕ 新規物件追加":
       key="add_dep_radio",
   )
 
+  # 🌟 ここも完璧に修正済み
   target_schema = [
       s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
   ]
