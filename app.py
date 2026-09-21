@@ -113,7 +113,6 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
     st.markdown("---")
     st.markdown("以下の内容で変更を保存します。内容を確認してください。")
 
-    # 変更前と変更後を比較してリスト化
     diff_items = []
     for k, new_v in edited_payload.items():
         old_v = str(target_row.get(k, "")).strip()
@@ -164,7 +163,8 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
+    # 🌟 括弧のタイポを完全に修正済み
+    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
     dep_options = ["すべて（総合）"] + available_depts
 
     filter_dep = st.selectbox(
@@ -183,7 +183,7 @@ if mode == "📋 一覧表示・管理":
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department"] == filter_dep or s.get("department"] == "総合"]
+        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -354,7 +354,6 @@ if mode == "📋 一覧表示・管理":
 
             st.markdown("---")
 
-          # 🌟 保存ボタンが押されたらダイアログを起動する
           if top_save_clicked:
             show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row)
 
@@ -366,7 +365,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
@@ -377,7 +376,7 @@ elif mode == "➕ 新規物件追加":
   )
 
   target_schema = [
-      s for s in schema if s.get("department") == add_dep or s.get("department"] == "総合"
+      s for s in schema if s.get("department"] == add_dep or s.get("department") == "総合"
   ]
 
   new_save_clicked = st.button(
