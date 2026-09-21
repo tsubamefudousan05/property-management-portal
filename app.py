@@ -6,14 +6,11 @@ import streamlit as st
 
 st.set_page_config(page_title="管理替え・進行管理ポータル", layout="wide")
 
-# 🌟 キャッシュを完全にクリアして常に最新データを取得する
-st.cache_data.clear()
-
 # ==========================================
 # 🔐 簡易ログイン認証
 # ==========================================
 def check_password():
-    """パスワード認証を行う関数"""
+    """パスワード認証を行う関数（一度認証すればセッションに保持）"""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
@@ -52,7 +49,15 @@ def fetch_data(sheet_name="引き継ぎ書"):
     return {"schema": [], "headers": [], "data": []}
 
 
-st.title("🏠 管理替え・進行管理ポータル")
+# 🌟 タイトルと「パスワードなしでデータを再取得するリロードボタン」を配置
+col_title, col_reload = st.columns([5, 1])
+with col_title:
+    st.title("🏠 管理替え・進行管理ポータル")
+with col_reload:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 最新に更新", use_container_width=True, help="パスワードを再入力せずにデータを最新状態に更新します"):
+        st.cache_data.clear()
+        st.rerun()
 
 mode = st.radio(
     "操作モード",
@@ -419,7 +424,6 @@ elif mode == "🏁 管理終了案件":
       prop_options.append(label)
       prop_map[label] = row
 
-    # 🌟 左右に分割（左：セレクトボックス、右：対象データ一覧）
     col_selectors, col_table = st.columns([4, 6])
 
     with col_selectors:
@@ -536,7 +540,6 @@ elif mode == "🔄 オーナーチェンジ案件":
       prop_options.append(label)
       prop_map[label] = row
 
-    # 🌟 左右に分割（左：セレクトボックス、右：対象データ一覧）
     col_selectors, col_table = st.columns([4, 6])
 
     with col_selectors:
