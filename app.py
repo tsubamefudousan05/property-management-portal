@@ -129,7 +129,6 @@ if mode == "📋 一覧表示・管理":
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
 
-      # 🌟 括弧のエラーを完全に解消した安全な記述
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
@@ -157,20 +156,9 @@ if mode == "📋 一覧表示・管理":
         existing_cols = [c for c in columns_to_show if c in df_display.columns]
         df_display_filtered = df_display[existing_cols]
 
-        df_display_filtered = df_display_filtered.astype(str)
-
-        def highlight_mi(val):
-          if str(val).strip() == "未":
-            return "background-color: #594500; color: #ffeb3b;"
-          return ""
-
-        try:
-          styled_df = df_display_filtered.style.map(highlight_mi)
-        except AttributeError:
-          styled_df = df_display_filtered.style.applymap(highlight_mi)
-
+        # 🌟 エラーの起きる .style を廃止し、純粋で高速な dataframe 表示に切り替え
         event = st.dataframe(
-            styled_df,
+            df_display_filtered,
             use_container_width=True,
             height=580,
             selection_mode="single-row",
@@ -407,7 +395,7 @@ elif mode == "➕ 新規物件追加":
                   key=f"rad_{unique_key}",
                   horizontal=True,
                   label_visibility="collapsed",
-              )
+                )
               new_payload[title] = chosen_radio
           else:
             if status_choice == "未":
