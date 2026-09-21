@@ -38,7 +38,7 @@ st.title("🏢 物件管理・進行管理ポータル")
 st.markdown("---")
 
 # 🔗 接続先GAS（Google Apps Script）のウェブアプリURLを設定
-GAS_URL = "https://docs.google.com/spreadsheets/d/1gZrLzt8pn5boYFxhiRdFwbl4UL3eKPw010zCis5kCOQ/edit?usp=drive_link"
+GAS_URL = "https://script.google.com/macros/s/AKfycbzADsde-SbZ_tmc4_p2lM7HjRLiuCqyDfD6v_deho-siZKQOhky8UC_OldMtLTxJ2PG/exec"
 
 # --- データ取得関数 ---
 @st.cache_data(ttl=60)
