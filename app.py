@@ -17,7 +17,6 @@ def check_password():
     if st.session_state.authenticated:
         return True
 
-    # ログイン画面をコンパクトに中央配置
     _, col_center, _ = st.columns([1, 2, 1])
     with col_center:
         st.markdown("### 🔒 ログイン認証")
@@ -114,7 +113,6 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    # 🌟 スキーマから存在する部署名を自動抽出してセレクトボックスの選択肢を作成
     available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
     dep_options = ["すべて（総合）"] + available_depts
 
@@ -124,7 +122,6 @@ if mode == "📋 一覧表示・管理":
         key="filter_dep_select"
     )
 
-    # 部署に応じたデータ絞り込み
     filtered_data = []
     for row in data:
       filtered_data.append(row)
@@ -149,7 +146,6 @@ if mode == "📋 一覧表示・管理":
 
         df_display = pd.DataFrame(display_data)
 
-        # テーブル側の「未」ハイライト
         def highlight_mi(val):
           if str(val).strip() == "未":
             return "background-color: #594500; color: #ffeb3b;"
@@ -205,7 +201,6 @@ if mode == "📋 一覧表示・管理":
               "💾 変更を保存", type="primary", use_container_width=True
           )
 
-        # 🌟 選択された部署に合致するスキーマ（＋総合）を動的に抽出
         if filter_dep == "すべて（総合）":
           target_schema = schema
         else:
@@ -330,8 +325,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  # 🌟 新規追加側の部署選択も動的に生成
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
@@ -342,7 +336,7 @@ elif mode == "➕ 新規物件追加":
   )
 
   target_schema = [
-      s for s in schema if s.get("department") == add_dep or s.get("department"] == "総合"
+      s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
   ]
 
   new_save_clicked = st.button(
