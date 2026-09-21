@@ -107,9 +107,8 @@ def parse_fixed_date(val):
   return None
 
 
-# 💡 修正：部署の項目の中に「未入力（未）」が1つでもあれば False（未完了）を返す関数
+# 部署の項目の中に「未入力（未）」が1つでもあれば False（未完了）を返す関数
 def is_department_completed(row, dep_name, schema_list):
-  # 部署フィルターが「すべて（総合）」の場合は総合のスキーマ対象、それ以外は各課＋総合
   if dep_name == "すべて（総合）":
     dep_schemas = schema_list
   else:
@@ -117,7 +116,6 @@ def is_department_completed(row, dep_name, schema_list):
     
   for s in dep_schemas:
     val = row.get(s["title"], "")
-    # 「未」や空欄の項目が1つでもあれば、その部署としては「未完了」とする
     if val is None or str(val).strip() in ["", "-", "未選択", "None", "nan", "未"]:
       return False
   return True
@@ -146,9 +144,8 @@ if mode == "📋 一覧表示・管理":
     for row in data:
       match_status = True
       if filter_status == "未入力のみ表示":
-        # 選択中の部署の項目がすべて埋まっているかチェック
         completed = is_department_completed(row, filter_dep, schema)
-        if completed:  # 全部埋まっていればリストから除外する
+        if completed:  # 全部埋まっていればリストから除外
           match_status = False
 
       if match_status:
@@ -437,4 +434,19 @@ elif mode == "➕ 新規物件追加":
 
       st.markdown("---")
 
-    ,if new_save_clicked:  # type: ignore
+    if new_save_clicked:
+      payload = {"action": "save", "payload": new_payload}
+      try:
+        res = requests.post(GAS_URL, json=payload)
+        if res.status_code == 200:
+          st.success("正常に新規登録されました！")
+          st.cache_data.clear()
+          st.rerun()
+        else:
+          st.error("登録に失敗しました。")
+      except Exception as e:
+        st.error(f"通信エラー: {e}")
+
+elif mode == "⚙️ 部署別・進捗ステータスビュー":
+  st.subheader("⚙️ 部署別・進捗ステータス確認モード")
+  st.info("※「📋 一覧表示・管理」タブ側のフィルター機能に統合されました。")
