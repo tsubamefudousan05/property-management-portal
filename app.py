@@ -129,11 +129,10 @@ if mode == "📋 一覧表示・管理":
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
 
-      # 🌟 選択された部署に合致するスキーマを定義（ここで括弧エラーを修正済み）
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
+        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -152,11 +151,13 @@ if mode == "📋 一覧表示・管理":
 
         df_display = pd.DataFrame(display_data)
 
-        # 左側のテーブルも選択中部署の項目に連動して列を絞り込む
         valid_titles = [s["title"] for s in target_schema]
         columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
         existing_cols = [c for c in columns_to_show if c in df_display.columns]
         df_display_filtered = df_display[existing_cols]
+
+        # 🌟 エラー防止のため一度すべての列を文字列型に変換
+        df_display_filtered = df_display_filtered.astype(str)
 
         def highlight_mi(val):
           if str(val).strip() == "未":
