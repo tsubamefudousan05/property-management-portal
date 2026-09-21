@@ -107,11 +107,17 @@ def parse_fixed_date(val):
   return None
 
 
-# 判定ヘルパー：特定課の項目がすべて入力済みかチェック
+# 💡 修正：部署の項目の中に「未入力（未）」が1つでもあれば False（未完了）を返す関数
 def is_department_completed(row, dep_name, schema_list):
-  dep_schemas = [s for s in schema_list if s["department"] == dep_name or s["department"] == "総合"]
+  # 部署フィルターが「すべて（総合）」の場合は総合のスキーマ対象、それ以外は各課＋総合
+  if dep_name == "すべて（総合）":
+    dep_schemas = schema_list
+  else:
+    dep_schemas = [s for s in schema_list if s["department"] == dep_name or s["department"] == "総合"]
+    
   for s in dep_schemas:
     val = row.get(s["title"], "")
+    # 「未」や空欄の項目が1つでもあれば、その部署としては「未完了」とする
     if val is None or str(val).strip() in ["", "-", "未選択", "None", "nan", "未"]:
       return False
   return True
@@ -121,7 +127,6 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 表示・編集フィルター選択")
     
-    # 🌟 部署フィルター ＆ 2択の進捗フィルター（すべて / 未入力のみ表示）
     col_f1, col_f2 = st.columns(2)
     with col_f1:
       filter_dep = st.selectbox(
@@ -139,16 +144,11 @@ if mode == "📋 一覧表示・管理":
     # フィルター適用ロジック
     filtered_data = []
     for row in data:
-      target_dep_name = None
-      if filter_dep == "1課":
-        target_dep_name = "1課"
-      elif filter_dep == "2課":
-        target_dep_name = "2課"
-
       match_status = True
-      if target_dep_name and filter_status == "未入力のみ表示":
-        completed = is_department_completed(row, target_dep_name, schema)
-        if completed:  # すでに完了しているものは除外
+      if filter_status == "未入力のみ表示":
+        # 選択中の部署の項目がすべて埋まっているかチェック
+        completed = is_department_completed(row, filter_dep, schema)
+        if completed:  # 全部埋まっていればリストから除外する
           match_status = False
 
       if match_status:
@@ -437,19 +437,4 @@ elif mode == "➕ 新規物件追加":
 
       st.markdown("---")
 
-    if new_save_clicked:
-      payload = {"action": "save", "payload": new_payload}
-      try:
-        res = requests.post(GAS_URL, json=payload)
-        if res.status_code == 200:
-          st.success("正常に新規登録されました！")
-          st.cache_data.clear()
-          st.rerun()
-        else:
-          st.error("登録に失敗しました。")
-      except Exception as e:
-        st.error(f"通信エラー: {e}")
-
-elif mode == "⚙️ 部署別・進捗ステータスビュー":
-  st.subheader("⚙️ 部署別・進捗ステータス確認モード")
-  st.info("※「📋 一覧表示・管理」タブ側のフィルター機能に統合されました。")
+    ,if new_save_clicked:  # type: ignore
