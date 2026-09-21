@@ -163,7 +163,6 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    # 🌟 括弧のタイポを完全に修正済み
     available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
     dep_options = ["すべて（総合）"] + available_depts
 
@@ -375,8 +374,9 @@ elif mode == "➕ 新規物件追加":
       key="add_dep_radio",
   )
 
+  # 🌟 ここも完全に修正済み
   target_schema = [
-      s for s in schema if s.get("department"] == add_dep or s.get("department") == "総合"
+      s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
   ]
 
   new_save_clicked = st.button(
