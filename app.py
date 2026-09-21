@@ -105,14 +105,13 @@ def parse_fixed_date(val):
   return None
 
 
-# 🌟 保存確認用のモーダルダイアログ（空欄なら自動で「済」にする自動補正付き）
+# 🌟 保存確認用のモーダルダイアログ
 @st.dialog("📋 変更内容の確認")
 def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row):
     st.markdown(f"## 🏠 {property_name}")
     st.markdown(f"**対象行番号**: {selected_row_id}")
     st.markdown("---")
     
-    # 🌟 自動補正ガード：テキストが空っぽのものは自動的に「済」をセットする
     validated_payload = {}
     for k, v in edited_payload.items():
         if v is None or str(v).strip() == "":
@@ -170,28 +169,60 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
 
 if mode == "📋 一覧表示・管理":
   if data:
-    st.markdown("### 🔍 部署フィルター選択")
+    st.markdown("### 🔍 検索・フィルター選択")
     
-    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
-    dep_options = ["すべて（総合）"] + available_depts
+    # 🌟 部署セレクトボックスと日付順物件セレクトボックスを横並び（半分ずつ）に配置
+    col_f1, col_f2 = st.columns(2)
+    
+    with col_f1:
+      available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+      dep_options = ["すべて（総合）"] + available_depts
 
-    filter_dep = st.selectbox(
-        "📂 表示する部署を選択",
-        dep_options,
-        key="filter_dep_select"
-    )
+      filter_dep = st.selectbox(
+          "📂 部署を選択",
+          dep_options,
+          key="filter_dep_select"
+      )
 
     filtered_data = []
     for row in data:
       filtered_data.append(row)
 
+    if filter_dep != "すべて（総合）":
+      target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
+    else:
+      target_schema = schema
+
+    # 🌟 物件を「集金開始月（日付順）」でソートしてセレクトボックスの選択肢を作る
+    def get_sort_key(row):
+      date_val = parse_fixed_date(row.get("集金開始月", ""))
+      if date_val:
+        return (0, date_val)
+      return (1, date.max) # 日付がないものは後ろへ
+
+    sorted_filtered_data = sorted(filtered_data, key=get_sort_key)
+    
+    property_options = ["未選択（物件を選んでください）"]
+    property_map = {}
+    for row in sorted_filtered_data:
+      p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
+      raw_date = row.get("集金開始月", "")
+      parsed_d = parse_fixed_date(raw_date)
+      date_str = parsed_d.strftime("%Y/%m/%d") if parsed_d else (str(raw_date) if raw_date else "日付未設定")
+      
+      label = f"{p_name} （集金開始月: {date_str}）"
+      property_options.append(label)
+      property_map[label] = row
+
+    with col_f2:
+      selected_prop_label = st.selectbox(
+          "🏠 物件を直接選択（日付順）",
+          property_options,
+          key="direct_property_select"
+      )
+
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
-
-      if filter_dep == "すべて（総合）":
-        target_schema = schema
-      else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -222,149 +253,133 @@ if mode == "📋 一覧表示・管理":
 
         df_display_filtered = df_display[unique_columns_to_show]
 
-        event = st.dataframe(
+        # 🌟 左端のチェックボックス（選択モード）を完全廃止し、純粋な表表示にする
+        st.dataframe(
             df_display_filtered,
             use_container_width=True,
             height=580,
-            selection_mode="single-row",
-            on_select="rerun",
-            key="data_table_selection",
+            hide_index=True,
         )
 
-      if "active_index" not in st.session_state:
-        st.session_state.active_index = 0
-
-      selected_rows = []
-      if event and hasattr(event, "selection") and event.selection:
-        if hasattr(event.selection, "rows"):
-          selected_rows = event.selection.rows
-        elif isinstance(event.selection, dict):
-          selected_rows = event.selection.get("rows", [])
-
       with col_form:
-        head_col1, head_col2, head_col3 = st.columns([2, 1, 1])
+        # 🌟 物件が選択されていない（未選択）なら、フォームを表示しない
+        if selected_prop_label == "未選択（物件を選んでください）":
+          st.markdown("<br><br><br>", unsafe_allow_html=True)
+          st.info("👈 上のセレクトボックス、または一覧から物件を選択すると編集フォームが表示されます。")
+        else:
+          target_row = property_map[selected_prop_label]
+          selected_row_id = target_row["_rowId"]
+          property_name = str(target_row.get("物件名称", "")).strip()
+          if not property_name:
+            property_name = "（物件名未設定）"
 
-        if st.session_state.active_index >= len(filtered_data):
-          st.session_state.active_index = 0
-        target_row = filtered_data[st.session_state.active_index]
-        selected_row_id = target_row["_rowId"]
+          head_col1, head_col3 = st.columns([3, 1])
 
-        property_name = str(target_row.get("物件名称", "")).strip()
-        if not property_name:
-          property_name = "（物件名未設定）"
+          with head_col1:
+            st.subheader(f"✏️ 選択中：{property_name} （行番号 {selected_row_id}）")
 
-        with head_col1:
-          st.subheader(f"✏️ 選択中：{property_name} （行番号 {selected_row_id}）")
+          with head_col3:
+            top_save_clicked = st.button(
+                "💾 変更を保存", type="primary", use_container_width=True
+            )
 
-        with head_col2:
-          load_clicked = st.button("📥 選択行を読込", use_container_width=True)
-          if load_clicked and selected_rows:
-            st.session_state.active_index = selected_rows[0]
-            st.rerun()
+          form_version_key = f"row_{selected_row_id}_dep_{filter_dep}"
 
-        with head_col3:
-          top_save_clicked = st.button(
-              "💾 変更を保存", type="primary", use_container_width=True
-          )
+          with st.container(height=500):
+            edited_payload = {}
 
-        form_version_key = f"row_{selected_row_id}_dep_{filter_dep}"
+            grouped_items = {}
+            for s in target_schema:
+              g = s["group"]
+              if g not in grouped_items:
+                grouped_items[g] = []
+              grouped_items[g].append(s)
 
-        with st.container(height=500):
-          edited_payload = {}
+            for group_name, items in grouped_items.items():
+              st.markdown(f"### 📌 【 {group_name} 】")
+              form_cols = st.columns(2)
 
-          grouped_items = {}
-          for s in target_schema:
-            g = s["group"]
-            if g not in grouped_items:
-              grouped_items[g] = []
-            grouped_items[g].append(s)
+              for i, s in enumerate(items):
+                title = s["title"]
+                raw_val = target_row.get(title, "")
+                options = s["options"]
+                unique_key = f"{form_version_key}_{group_name}_{i}_{title}"
 
-          for group_name, items in grouped_items.items():
-            st.markdown(f"### 📌 【 {group_name} 】")
-            form_cols = st.columns(2)
+                target_col = form_cols[i % 2]
+                with target_col:
+                  label_col, status_col = st.columns([2, 1])
+                  with label_col:
+                    is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
+                    if is_mi_form:
+                      st.markdown(f"<span style='color: #ffeb3b;'>**{title}**</span>", unsafe_allow_html=True)
+                    else:
+                      st.markdown(f"**{title}**")
 
-            for i, s in enumerate(items):
-              title = s["title"]
-              raw_val = target_row.get(title, "")
-              options = s["options"]
-              unique_key = f"{form_version_key}_{group_name}_{i}_{title}"
-
-              target_col = form_cols[i % 2]
-              with target_col:
-                label_col, status_col = st.columns([2, 1])
-                with label_col:
-                  is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
-                  if is_mi_form:
-                    st.markdown(f"<span style='color: #ffeb3b;'>**{title}**</span>", unsafe_allow_html=True)
-                  else:
-                    st.markdown(f"**{title}**")
-
-                with status_col:
-                  current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未"] else "未"
-                  status_choice = st.radio(
-                      f"状態_{unique_key}",
-                      ["未", "済"],
-                      index=0 if current_status == "未" else 1,
-                      horizontal=True,
-                      key=f"status_{unique_key}",
-                      label_visibility="collapsed"
-                  )
-
-                if title in ["管理契約開始日", "集金開始月"]:
-                  if status_choice == "未":
-                    edited_payload[title] = "未"
-                  else:
-                    parsed_d = parse_fixed_date(raw_val)
-                    d_default = parsed_d if parsed_d else date.today()
-                    chosen_date = st.date_input(
-                        f"{title} (日付)",
-                        value=d_default,
-                        key=f"date_{unique_key}",
-                        label_visibility="collapsed",
-                    )
-                    edited_payload[title] = chosen_date.strftime("%Y/%m/%d")
-
-                elif len(options) > 0:
-                  if status_choice == "未":
-                    edited_payload[title] = "未"
-                  else:
-                    current_val = str(raw_val).strip()
-                    if current_val in ["-", "", "未選択", "未"]:
-                      current_val = options[0]
-
-                    try:
-                      default_idx = options.index(current_val)
-                    except ValueError:
-                      default_idx = 0
-
-                    chosen_radio = st.radio(
-                        f"{title} (選択)",
-                        options,
-                        index=default_idx,
-                        key=f"rad_{unique_key}",
+                  with status_col:
+                    current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未"] else "未"
+                    status_choice = st.radio(
+                        f"状態_{unique_key}",
+                        ["未", "済"],
+                        index=0 if current_status == "未" else 1,
                         horizontal=True,
-                        label_visibility="collapsed",
+                        key=f"status_{unique_key}",
+                        label_visibility="collapsed"
                     )
-                    edited_payload[title] = chosen_radio
 
-                else:
-                  if status_choice == "未":
-                    edited_payload[title] = "未"
+                  if title in ["管理契約開始日", "集金開始月"]:
+                    if status_choice == "未":
+                      edited_payload[title] = "未"
+                    else:
+                      parsed_d = parse_fixed_date(raw_val)
+                      d_default = parsed_d if parsed_d else date.today()
+                      chosen_date = st.date_input(
+                          f"{title} (日付)",
+                          value=d_default,
+                          key=f"date_{unique_key}",
+                          label_visibility="collapsed",
+                      )
+                      edited_payload[title] = chosen_date.strftime("%Y/%m/%d")
+
+                  elif len(options) > 0:
+                    if status_choice == "未":
+                      edited_payload[title] = "未"
+                    else:
+                      current_val = str(raw_val).strip()
+                      if current_val in ["-", "", "未選択", "未"]:
+                        current_val = options[0]
+
+                      try:
+                        default_idx = options.index(current_val)
+                      except ValueError:
+                        default_idx = 0
+
+                      chosen_radio = st.radio(
+                          f"{title} (選択)",
+                          options,
+                          index=default_idx,
+                          key=f"rad_{unique_key}",
+                          horizontal=True,
+                          label_visibility="collapsed",
+                      )
+                      edited_payload[title] = chosen_radio
+
                   else:
-                    typed_val = st.text_input(
-                        f"{title} (自由記述)",
-                        value=str(raw_val).strip() if raw_val and str(raw_val) != "未" else "",
-                        placeholder="直接入力する場合ここに記載",
-                        key=f"txt_{unique_key}",
-                        label_visibility="collapsed",
-                    )
-                    edited_payload[title] = typed_val.strip()
+                    if status_choice == "未":
+                      edited_payload[title] = "未"
+                    else:
+                      typed_val = st.text_input(
+                          f"{title} (自由記述)",
+                          value=str(raw_val).strip() if raw_val and str(raw_val) != "未" else "",
+                          placeholder="直接入力する場合ここに記載",
+                          key=f"txt_{unique_key}",
+                          label_visibility="collapsed",
+                      )
+                      edited_payload[title] = typed_val.strip()
 
-            st.markdown("---")
+              st.markdown("---")
 
-          if top_save_clicked:
-            show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row)
-
+            if top_save_clicked:
+              show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row)
     else:
       st.info("条件に一致する物件はありません。")
   else:
@@ -373,7 +388,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department"] and s.get("department") != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
