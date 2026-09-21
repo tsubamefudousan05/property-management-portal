@@ -6,11 +6,14 @@ import streamlit as st
 
 st.set_page_config(page_title="管理替え・進行管理ポータル", layout="wide")
 
+# 🌟 キャッシュを完全にクリアして常に最新データを取得する
+st.cache_data.clear()
+
 # ==========================================
 # 🔐 簡易ログイン認証
 # ==========================================
 def check_password():
-    """パスワード認証を行う関数（一度認証すればセッションに保持）"""
+    """パスワード認証を行う関数"""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
@@ -441,7 +444,7 @@ elif mode == "🏁 管理終了案件":
       for row in data:
         new_row = row.copy()
         for k, v in new_row.items():
-          if "日" in k and v:
+          if ("日" in k or "月" in k) and v:
             fixed_date = parse_fixed_date(v)
             if fixed_date:
               new_row[k] = fixed_date.strftime("%Y/%m/%d")
@@ -488,20 +491,48 @@ elif mode == "🏁 管理終了案件":
             u_key = f"kanryo_{row_id}_{i}_{title}"
 
             with f_cols[i % 4]:
-              st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
-              if len(opts) > 0:
-                cur = str(raw_val).strip()
-                idx = opts.index(cur) if cur in opts else 0
-                val = st.selectbox(title, opts, index=idx, key=f"sel_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = val
-              elif "日" in title or "月" in title:
-                parsed = parse_fixed_date(raw_val)
-                d_val = parsed if parsed else date.today()
-                chosen_d = st.date_input(title, value=d_val, key=f"date_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              label_col, status_col = st.columns([2, 1])
+              with label_col:
+                is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
+                if is_mi_form:
+                  st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                else:
+                  st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+
+              with status_col:
+                current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未", "未定"] else "未"
+                status_choice = st.radio(
+                    f"状態_{u_key}",
+                    ["未", "済"],
+                    index=0 if current_status == "未" else 1,
+                    horizontal=True,
+                    key=f"status_{u_key}",
+                    label_visibility="collapsed"
+                )
+
+              # 🌟 日付列（日・月が含まれる項目）はカレンダーから取得
+              if "日" in title or "月" in title:
+                if status_choice == "未":
+                  edited_payload[title] = "未定"
+                else:
+                  parsed_d = parse_fixed_date(raw_val)
+                  d_val = parsed_d if parsed_d else date.today()
+                  chosen_d = st.date_input(title, value=d_val, key=f"date_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              elif len(opts) > 0:
+                if status_choice == "未":
+                  edited_payload[title] = "未"
+                else:
+                  cur = str(raw_val).strip()
+                  idx = opts.index(cur) if cur in opts else 0
+                  val = st.selectbox(title, opts, index=idx, key=f"sel_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = val
               else:
-                txt = st.text_input(title, value=str(raw_val) if raw_val and str(raw_val)!="nan" else "", key=f"txt_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = txt.strip()
+                if status_choice == "未":
+                  edited_payload[title] = "未"
+                else:
+                  txt = st.text_input(title, value=str(raw_val) if raw_val and str(raw_val)!="nan" else "", key=f"txt_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = txt.strip()
           st.markdown("---")
 
         if save_btn:
@@ -557,7 +588,7 @@ elif mode == "🔄 オーナーチェンジ案件":
       for row in data:
         new_row = row.copy()
         for k, v in new_row.items():
-          if "日" in k and v:
+          if ("日" in k or "月" in k) and v:
             fixed_date = parse_fixed_date(v)
             if fixed_date:
               new_row[k] = fixed_date.strftime("%Y/%m/%d")
@@ -604,20 +635,48 @@ elif mode == "🔄 オーナーチェンジ案件":
             u_key = f"oc_{row_id}_{i}_{title}"
 
             with f_cols[i % 4]:
-              st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
-              if len(opts) > 0:
-                cur = str(raw_val).strip()
-                idx = opts.index(cur) if cur in opts else 0
-                val = st.selectbox(title, opts, index=idx, key=f"sel_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = val
-              elif "日" in title or "月" in title:
-                parsed = parse_fixed_date(raw_val)
-                d_val = parsed if parsed else date.today()
-                chosen_d = st.date_input(title, value=d_val, key=f"date_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              label_col, status_col = st.columns([2, 1])
+              with label_col:
+                is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
+                if is_mi_form:
+                  st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                else:
+                  st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+
+              with status_col:
+                current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未", "未定"] else "未"
+                status_choice = st.radio(
+                    f"状態_{u_key}",
+                    ["未", "済"],
+                    index=0 if current_status == "未" else 1,
+                    horizontal=True,
+                    key=f"status_{u_key}",
+                    label_visibility="collapsed"
+                )
+
+              # 🌟 オーナーチェンジの「最終家賃送金日」「決済日」「管理変更終了日」などの日付列をカレンダー入力に設定
+              if "日" in title or "月" in title:
+                if status_choice == "未":
+                  edited_payload[title] = "未定"
+                else:
+                  parsed_d = parse_fixed_date(raw_val)
+                  d_val = parsed_d if parsed_d else date.today()
+                  chosen_d = st.date_input(title, value=d_val, key=f"date_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              elif len(opts) > 0:
+                if status_choice == "未":
+                  edited_payload[title] = "未"
+                else:
+                  cur = str(raw_val).strip()
+                  idx = opts.index(cur) if cur in opts else 0
+                  val = st.selectbox(title, opts, index=idx, key=f"sel_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = val
               else:
-                txt = st.text_input(title, value=str(raw_val) if raw_val and str(raw_val)!="nan" else "", key=f"txt_{u_key}", label_visibility="collapsed")
-                edited_payload[title] = txt.strip()
+                if status_choice == "未":
+                  edited_payload[title] = "未"
+                else:
+                  txt = st.text_input(title, value=str(raw_val) if raw_val and str(raw_val)!="nan" else "", key=f"txt_{u_key}", label_visibility="collapsed")
+                  edited_payload[title] = txt.strip()
           st.markdown("---")
 
         if save_btn:
