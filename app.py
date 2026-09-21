@@ -1,4 +1,5 @@
 from datetime import datetime, date, timedelta
+import base64
 import json
 import pandas as pd
 import requests
@@ -50,6 +51,26 @@ def fetch_data(sheet_name="引き継ぎ書"):
   except Exception as e:
     st.error(f"データ取得エラー ({sheet_name}): {e}")
     return {"schema": [], "headers": [], "data": []}
+
+
+# 🌟 画像ファイルをアップロードしてGoogleドライブのURLを取得するヘルパー関数
+def upload_image_to_gas(uploaded_file):
+  try:
+    bytes_data = uploaded_file.getvalue()
+    b64_str = base64.b64encode(bytes_data).decode("utf-8")
+    payload = {
+        "action": "upload_image",
+        "fileData": b64_str,
+        "fileName": uploaded_file.name,
+        "mimeType": uploaded_file.type
+    }
+    res = requests.post(GAS_URL, json=payload)
+    res_json = res.json()
+    if res_json.get("status") == "success":
+      return res_json.get("url")
+  except Exception as e:
+    st.error(f"画像アップロードエラー: {e}")
+  return None
 
 
 # 🌟 タイトルと「パスワードなしでデータを再取得するリロードボタン」を配置
@@ -124,7 +145,7 @@ def get_safe_property_name(row):
 
 # 🌟 保存確認用のモーダルダイアログ
 @st.dialog("📋 変更内容の確認")
-def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row, sheet_name="引き継ぎ書", is_new=False):
+def show_confirm_dialog(property_name, selected_row_id, edited_payload, uploaded_files_dict, target_row, sheet_name="引き継ぎ書", is_new=False):
     if is_new:
         st.markdown(f"## ➕ 新規登録：{property_name}")
         st.markdown("以下の内容で**新規データ**を登録します。内容を確認してください。")
@@ -134,29 +155,41 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
         st.markdown("以下の内容で変更を保存します。内容を確認してください。")
     st.markdown("---")
     
-    validated_payload = {}
+    # 🌟 アップロードファイルがある場合はGASへ送信してURLに変換
+    final_payload = {}
     for k, v in edited_payload.items():
-        if v is None or str(v).strip() == "":
-            validated_payload[k] = "未"
+        if k in uploaded_files_dict and uploaded_files_dict[k] is not None:
+            with st.spinner(f"「{k}」の写真をアップロード中..."):
+                file_url = upload_image_to_gas(uploaded_files_dict[k])
+                if file_url:
+                    final_payload[k] = file_url
+                else:
+                    final_payload[k] = v
         else:
-            validated_payload[k] = v
+            if v is None or str(v).strip() == "":
+                final_payload[k] = "未"
+            else:
+                final_payload[k] = v
 
     if is_new:
-        for k, val in validated_payload.items():
+        for k, val in final_payload.items():
             cols = st.columns([2, 4])
             with cols[0]:
                 st.markdown(f"**{k}**")
             with cols[1]:
-                color_code = "#ffeb3b" if val == "未" else "#00bcd4"
-                st.markdown(f"<span style='color: {color_code};'>**{val}**</span>", unsafe_allow_html=True)
+                if "http" in str(val):
+                    st.markdown(f"<a href='{val}' target='_blank'>🔗 添付ファイルを開く</a>", unsafe_allow_html=True)
+                else:
+                    color_code = "#ffeb3b" if val == "未" else "#00bcd4"
+                    st.markdown(f"<span style='color: {color_code};'>**{val}**</span>", unsafe_allow_html=True)
             st.markdown("")
     else:
         diff_items = []
-        for k, new_v in validated_payload.items():
+        for k, new_v in final_payload.items():
             old_v = str(target_row.get(k, "")).strip()
             if old_v in ["", "-", "未選択", "None", "nan"]:
                 old_v = "未"
-            if new_v != old_v:
+            if str(new_v) != str(old_v):
                 diff_items.append({"title": k, "old": old_v, "new": new_v})
 
         if diff_items:
@@ -168,7 +201,8 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
                 with cols[1]:
                     st.markdown(f"変更前: <span style='color: #ff9800;'>{item['old']}</span>", unsafe_allow_html=True)
                 with cols[2]:
-                    st.markdown(f"変更後: <span style='color: #4caf50;'>**{item['new']}**</span>", unsafe_allow_html=True)
+                    val_display = f"<a href='{item['new']}' target='_blank'>🔗 リンク</a>" if "http" in str(item['new']) else f"**{item['new']}**"
+                    st.markdown(f"変更後: <span style='color: #4caf50;'>{val_display}</span>", unsafe_allow_html=True)
                 st.markdown("")
         else:
             st.info("変更された項目はありません。")
@@ -186,7 +220,7 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
             payload = {
                 "action": action_type,
                 "sheet": sheet_name,
-                "payload": validated_payload,
+                "payload": final_payload,
             }
             if not is_new:
                 payload["rowId"] = selected_row_id
@@ -305,6 +339,7 @@ if mode == "📋 引き継ぎ書・管理":
 
       with st.container(height=600):
         new_payload = {}
+        uploaded_files_dict = {}
         grouped_items = {}
         for s in target_schema:
           g = s["group"]
@@ -336,7 +371,24 @@ if mode == "📋 引き継ぎ書・管理":
                     label_visibility="collapsed"
                 )
 
-              if title in ["管理契約開始日", "集金開始月"]:
+              # 📸 写真・画像・添付項目の場合
+              if "写真" in title or "画像" in title or "添付" in title:
+                if status_choice == "未":
+                  new_payload[title] = "未"
+                else:
+                  uploaded_file = st.file_uploader(
+                      f"{title} (ファイル)",
+                      type=["jpg", "jpeg", "png", "heic"],
+                      key=f"file_{unique_key}",
+                      label_visibility="collapsed"
+                  )
+                  if uploaded_file is not None:
+                    uploaded_files_dict[title] = uploaded_file
+                    new_payload[title] = uploaded_file.name
+                  else:
+                    new_payload[title] = "未"
+
+              elif title in ["管理契約開始日", "集金開始月"]:
                 if status_choice == "未":
                   new_payload[title] = "未"
                 else:
@@ -381,7 +433,7 @@ if mode == "📋 引き継ぎ書・管理":
             if "物件" in k and v and v != "未":
               p_name_val = v
               break
-          show_confirm_dialog(p_name_val, None, new_payload, {}, "引き継ぎ書", is_new=True)
+          show_confirm_dialog(p_name_val, None, new_payload, uploaded_files_dict, {}, "引き継ぎ書", is_new=True)
 
     elif selected_prop_label == "未選択（物件を選んでください）":
       st.info("👆 上のセレクトボックスから物件を選択、または「➕ 【新規物件を追加する】」を選択してください。")
@@ -404,6 +456,7 @@ if mode == "📋 引き継ぎ書・管理":
 
       with st.container(height=600):
         edited_payload = {}
+        uploaded_files_dict = {}
 
         grouped_items = {}
         for s in target_schema:
@@ -443,7 +496,27 @@ if mode == "📋 引き継ぎ書・管理":
                     label_visibility="collapsed"
                 )
 
-              if title in ["管理契約開始日", "集金開始月"]:
+              # 📸 写真・画像・添付項目の場合
+              if "写真" in title or "画像" in title or "添付" in title:
+                if status_choice == "未":
+                  edited_payload[title] = "未"
+                else:
+                  if raw_val and str(raw_val).startswith("http"):
+                    st.markdown(f"<a href='{raw_val}' target='_blank'>🔗 現在のファイルを開く</a>", unsafe_allow_html=True)
+                  
+                  uploaded_file = st.file_uploader(
+                      f"{title} (ファイル入替)",
+                      type=["jpg", "jpeg", "png", "heic"],
+                      key=f"file_{unique_key}",
+                      label_visibility="collapsed"
+                  )
+                  if uploaded_file is not None:
+                    uploaded_files_dict[title] = uploaded_file
+                    edited_payload[title] = uploaded_file.name
+                  else:
+                    edited_payload[title] = raw_val
+
+              elif title in ["管理契約開始日", "集金開始月"]:
                 if status_choice == "未":
                   edited_payload[title] = "未"
                 else:
@@ -496,7 +569,7 @@ if mode == "📋 引き継ぎ書・管理":
           st.markdown("---")
 
         if top_save_clicked:
-          show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row, "引き継ぎ書", is_new=False)
+          show_confirm_dialog(property_name, selected_row_id, edited_payload, uploaded_files_dict, target_row, "引き継ぎ書", is_new=False)
   else:
     st.info("データがありません。")
 
@@ -627,7 +700,7 @@ elif mode == "🏁 管理終了案件":
           if "物件" in k and v and v != "未":
             p_name_val = v
             break
-        show_confirm_dialog(p_name_val, None, new_payload, {}, "管理終了", is_new=True)
+        show_confirm_dialog(p_name_val, None, new_payload, {}, {}, "管理終了", is_new=True)
 
   elif selected_label != "未選択（物件を選んでください）":
     target_row = prop_map[selected_label]
@@ -707,7 +780,7 @@ elif mode == "🏁 管理終了案件":
         st.markdown("---")
 
       if save_btn:
-        show_confirm_dialog(p_name, row_id, edited_payload, target_row, "管理終了", is_new=False)
+        show_confirm_dialog(p_name, row_id, edited_payload, {}, target_row, "管理終了", is_new=False)
   else:
     st.info("👆 上のセレクトボックスから管理終了物件を選択、または新規追加を選択してください。")
 
@@ -836,7 +909,7 @@ elif mode == "🔄 オーナーチェンジ案件":
           if "物件" in k and v and v != "未":
             p_name_val = v
             break
-        show_confirm_dialog(p_name_val, None, new_payload, {}, "オーナーチェンジ", is_new=True)
+        show_confirm_dialog(p_name_val, None, new_payload, {}, {}, "オーナーチェンジ", is_new=True)
 
   elif selected_label != "未選択（物件を選んでください）":
     target_row = prop_map[selected_label]
@@ -916,6 +989,6 @@ elif mode == "🔄 オーナーチェンジ案件":
         st.markdown("---")
 
       if save_btn:
-        show_confirm_dialog(p_name, row_id, edited_payload, target_row, "オーナーチェンジ", is_new=False)
+        show_confirm_dialog(p_name, row_id, edited_payload, {}, target_row, "オーナーチェンジ", is_new=False)
   else:
     st.info("👆 上のセレクトボックスからオーナーチェンジ物件を選択、または新規追加を選択してください。")
