@@ -227,7 +227,6 @@ if mode == "📋 引き継ぎ書・管理":
 
       sorted_filtered_data = sorted(filtered_data, key=get_sort_key)
       
-      # 🌟 選択肢に新規追加オプションを含める
       property_options = ["未選択（物件を選んでください）", "➕ 【新規物件を追加する】"]
       property_map = {}
       for row in sorted_filtered_data:
@@ -298,7 +297,6 @@ if mode == "📋 引き継ぎ書・管理":
 
     st.markdown("---")
 
-    # 🌟 新規追加が選ばれた場合
     if selected_prop_label == "➕ 【新規物件を追加する】":
       st.subheader("➕ 引き継ぎ書：新規物件の追加登録")
       new_save_clicked = st.button("💾 新規データを登録する", type="primary", use_container_width=True, key="new_btn_hiki")
@@ -325,7 +323,7 @@ if mode == "📋 引き継ぎ書・管理":
             with target_col:
               label_col, status_col = st.columns([2, 1])
               with label_col:
-                st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
               with status_col:
                 status_choice = st.radio(
                     f"状態_{unique_key}",
@@ -376,7 +374,6 @@ if mode == "📋 引き継ぎ書・管理":
           st.markdown("---")
 
         if new_save_clicked:
-          # 物件名を取得してダイアログへ
           p_name_val = "新規物件"
           for k, v in new_payload.items():
             if "物件" in k and v and v != "未":
@@ -427,11 +424,12 @@ if mode == "📋 引き継ぎ書・管理":
             with target_col:
               label_col, status_col = st.columns([2, 1])
               with label_col:
+                # 🌟 未判定：黄色、済判定：水色に変更
                 is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
                 if is_mi_form:
                   st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
                 else:
-                  st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                  st.markdown(f"<span style='color: #00bcd4; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
 
               with status_col:
                 current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未"] else "未"
@@ -563,7 +561,6 @@ elif mode == "🏁 管理終了案件":
 
   st.markdown("---")
 
-  # 🌟 新規追加が選ばれた場合
   if selected_label == "➕ 【新規物件を追加する】":
     st.subheader("➕ 管理終了案件：新規物件の追加登録")
     new_save_btn = st.button("💾 新規データを登録する", type="primary", use_container_width=True, key="new_btn_kanryo")
@@ -646,11 +643,12 @@ elif mode == "🏁 管理終了案件":
           with f_cols[i % 4]:
             label_col, status_col = st.columns([2, 1])
             with label_col:
+              # 🌟 未判定：黄色、済判定：水色に変更
               is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
               if is_mi_form:
                 st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
               else:
-                st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: #00bcd4; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
 
             with status_col:
               current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未", "未定"] else "未"
@@ -752,7 +750,6 @@ elif mode == "🔄 オーナーチェンジ案件":
 
   st.markdown("---")
 
-  # 🌟 新規追加が選ばれた場合
   if selected_label == "➕ 【新規物件を追加する】":
     st.subheader("➕ オーナーチェンジ案件：新規物件の追加登録")
     new_save_btn = st.button("💾 新規データを登録する", type="primary", use_container_width=True, key="new_btn_oc")
@@ -835,11 +832,12 @@ elif mode == "🔄 オーナーチェンジ案件":
           with f_cols[i % 4]:
             label_col, status_col = st.columns([2, 1])
             with label_col:
+              # 🌟 未判定：黄色、済判定：水色に変更
               is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
               if is_mi_form:
                 st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
               else:
-                st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: #00bcd4; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
 
             with status_col:
               current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未", "未定"] else "未"
