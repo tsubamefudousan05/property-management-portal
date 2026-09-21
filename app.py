@@ -169,43 +169,42 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
 
 if mode == "📋 一覧表示・管理":
   if data:
-    st.markdown("### 🔍 検索・フィルター選択")
-    
     filtered_data = []
     for row in data:
       filtered_data.append(row)
 
-    # 🌟 1段目：左に「物件セレクト（日付順）」、右に「部署セレクト」を配置
-    col_f1, col_f2 = st.columns(2)
+    # 🌟 上段を左右に分割（左：セレクトボックス縦積み、右：対象データ一覧）
+    col_selectors, col_table = st.columns([4, 6])
 
-    def get_sort_key(row):
-      date_val = parse_fixed_date(row.get("集金開始月", ""))
-      if date_val:
-        return (0, date_val)
-      return (1, date.max)
-
-    sorted_filtered_data = sorted(filtered_data, key=get_sort_key)
-    
-    property_options = ["未選択（物件を選んでください）"]
-    property_map = {}
-    for row in sorted_filtered_data:
-      p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
-      raw_date = row.get("集金開始月", "")
-      parsed_d = parse_fixed_date(raw_date)
-      date_str = parsed_d.strftime("%Y/%m/%d") if parsed_d else (str(raw_date) if raw_date else "日付未設定")
+    with col_selectors:
+      st.markdown("### 🔍 検索・フィルター選択")
       
-      label = f"{p_name} （集金開始月: {date_str}）"
-      property_options.append(label)
-      property_map[label] = row
+      def get_sort_key(row):
+        date_val = parse_fixed_date(row.get("集金開始月", ""))
+        if date_val:
+          return (0, date_val)
+        return (1, date.max)
 
-    with col_f1:
+      sorted_filtered_data = sorted(filtered_data, key=get_sort_key)
+      
+      property_options = ["未選択（物件を選んでください）"]
+      property_map = {}
+      for row in sorted_filtered_data:
+        p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
+        raw_date = row.get("集金開始月", "")
+        parsed_d = parse_fixed_date(raw_date)
+        date_str = parsed_d.strftime("%Y/%m/%d") if parsed_d else (str(raw_date) if raw_date else "日付未設定")
+        
+        label = f"{p_name} （集金開始月: {date_str}）"
+        property_options.append(label)
+        property_map[label] = row
+
       selected_prop_label = st.selectbox(
           "🏠 物件を選択（日付順）",
           property_options,
           key="direct_property_select"
       )
 
-    with col_f2:
       available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
       dep_options = ["すべて（総合）"] + available_depts
 
@@ -220,49 +219,47 @@ if mode == "📋 一覧表示・管理":
     else:
       target_schema = schema
 
-    st.markdown("---")
+    with col_table:
+      st.markdown(f"### 📊 対象データ一覧（全 {len(filtered_data)} 件）")
 
-    # 🌟 2段目：対象データ一覧を上部にドーンと広く配置
-    st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
+      display_data = []
+      for row in filtered_data:
+        new_row = row.copy()
+        for k, v in new_row.items():
+          if k in ["管理契約開始日", "集金開始月"] and v:
+            fixed_date = parse_fixed_date(v)
+            if fixed_date:
+              new_row[k] = fixed_date.strftime("%Y/%m/%d")
+          if k != "_rowId" and (v is None or str(v).strip() in ["", "-", "未選択", "None", "nan"]):
+            new_row[k] = "未"
+        display_data.append(new_row)
 
-    display_data = []
-    for row in filtered_data:
-      new_row = row.copy()
-      for k, v in new_row.items():
-        if k in ["管理契約開始日", "集金開始月"] and v:
-          fixed_date = parse_fixed_date(v)
-          if fixed_date:
-            new_row[k] = fixed_date.strftime("%Y/%m/%d")
-        if k != "_rowId" and (v is None or str(v).strip() in ["", "-", "未選択", "None", "nan"]):
-          new_row[k] = "未"
-      display_data.append(new_row)
+      df_display = pd.DataFrame(display_data)
 
-    df_display = pd.DataFrame(display_data)
+      valid_titles = [s["title"] for s in target_schema]
+      columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
+      
+      seen = set()
+      unique_columns_to_show = []
+      for c in columns_to_show:
+        if c not in seen and c in df_display.columns:
+          seen.add(c)
+          unique_columns_to_show.append(c)
 
-    valid_titles = [s["title"] for s in target_schema]
-    columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
-    
-    seen = set()
-    unique_columns_to_show = []
-    for c in columns_to_show:
-      if c not in seen and c in df_display.columns:
-        seen.add(c)
-        unique_columns_to_show.append(c)
+      df_display_filtered = df_display[unique_columns_to_show]
 
-    df_display_filtered = df_display[unique_columns_to_show]
-
-    st.dataframe(
-        df_display_filtered,
-        use_container_width=True,
-        height=300,
-        hide_index=True,
-    )
+      st.dataframe(
+          df_display_filtered,
+          use_container_width=True,
+          height=250,
+          hide_index=True,
+      )
 
     st.markdown("---")
 
-    # 🌟 3段目：物件が選択されている場合のみ、下部に【4列表示】の編集フォームを展開
+    # 🌟 下段：物件が選択されている場合のみ、広々とした【4列表示】の編集フォームを展開
     if selected_prop_label == "未選択（物件を選んでください）":
-      st.info("👆 上のセレクトボックスから物件を選択すると、ここに詳細な編集フォーム（4列表示）が展開されます。")
+      st.info("👆 左上のセレクトボックスから物件を選択すると、ここに詳細な編集フォーム（4列表示）が展開されます。")
     else:
       target_row = property_map[selected_prop_label]
       selected_row_id = target_row["_rowId"]
@@ -294,7 +291,7 @@ if mode == "📋 一覧表示・管理":
 
         for group_name, items in grouped_items.items():
           st.markdown(f"### 📌 【 {group_name} 】")
-          # 🌟 ご要望の【4列表示】に変更！
+          # 🌟 広々とした【4列表示】
           form_cols = st.columns(4)
 
           for i, s in enumerate(items):
