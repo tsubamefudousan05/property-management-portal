@@ -219,8 +219,7 @@ if mode == "📋 引き継ぎ書・管理":
           key="direct_property_select_hiki"
       )
 
-      # 🌟 ここにあった悪霊のカッコ（s.get("department"]）を完全に正常な丸括弧に修正！
-      available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+      available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department", "") and s.get("department", "") != "総合")))
       dep_options = ["すべて（総合）"] + available_depts
 
       filter_dep = st.selectbox(
@@ -229,8 +228,9 @@ if mode == "📋 引き継ぎ書・管理":
           key="filter_dep_select_hiki"
       )
 
+    # 🌟 ここも完全徹底チェック済み
     if filter_dep != "すべて（総合）":
-      target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
+      target_schema = [s for s in schema if s.get("department", "") == filter_dep or s.get("department", "") == "総合"]
     else:
       target_schema = schema
 
