@@ -105,16 +105,25 @@ def parse_fixed_date(val):
   return None
 
 
-# 🌟 保存確認用のモーダルダイアログ
+# 🌟 保存確認用のモーダルダイアログ（空欄ガード自動補正付き）
 @st.dialog("📋 変更内容の確認")
 def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row):
     st.markdown(f"## 🏠 {property_name}")
     st.markdown(f"**対象行番号**: {selected_row_id}")
     st.markdown("---")
+    
+    # 🌟 自動補正ガード：済なのにテキストが空っぽのものは「未」に補正する
+    validated_payload = {}
+    for k, v in edited_payload.items():
+        if v is None or str(v).strip() == "":
+            validated_payload[k] = "未"
+        else:
+            validated_payload[k] = v
+
     st.markdown("以下の内容で変更を保存します。内容を確認してください。")
 
     diff_items = []
-    for k, new_v in edited_payload.items():
+    for k, new_v in validated_payload.items():
         old_v = str(target_row.get(k, "")).strip()
         if old_v in ["", "-", "未選択", "None", "nan"]:
             old_v = "未"
@@ -145,7 +154,7 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
             payload = {
                 "action": "update",
                 "rowId": selected_row_id,
-                "payload": edited_payload,
+                "payload": validated_payload,
             }
             try:
               res = requests.post(GAS_URL, json=payload)
@@ -163,7 +172,7 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
     dep_options = ["すべて（総合）"] + available_depts
 
     filter_dep = st.selectbox(
@@ -182,7 +191,7 @@ if mode == "📋 一覧表示・管理":
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
+        target_schema = [s for s in schema if s.get("department"] == filter_dep or s.get("department"] == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -364,7 +373,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
@@ -374,9 +383,8 @@ elif mode == "➕ 新規物件追加":
       key="add_dep_radio",
   )
 
-  # 🌟 ここも完全に修正済み
   target_schema = [
-      s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
+      s for s in schema if s.get("department"] == add_dep or s.get("department"] == "総合"
   ]
 
   new_save_clicked = st.button(
