@@ -46,8 +46,7 @@ def load_data():
     try:
         response = requests.get(GAS_URL)
         if response.status_code == 200:
-            data = response.json()
-            return data
+            return response.json()
         else:
             st.error(f"データ取得に失敗しました (ステータスコード: {response.status_code})")
             return None
@@ -67,17 +66,21 @@ st.subheader("📋 物件・進行管理一覧")
 # データ読み込み実行
 raw_data = load_data()
 
-if raw_data is not None:
-    # デバッグ用に取得したデータをそのまま表示（形式を確認するため）
-    st.write("取得したデータの中身:", raw_data)
+if raw_data is not None and "data" in raw_data:
+    # "data" キーの中身を取り出してDataFrameに変換
+    df = pd.DataFrame(raw_data["data"])
     
-    try:
-        df = pd.DataFrame(raw_data)
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("データが空です。")
-    except Exception as e:
-        st.warning(f"DataFrameへの変換でエラーが発生しました: {e}")
+    if not df.empty:
+        # ステータスや担当者などのフィルター機能（必要に応じて）
+        if "管理取得担当者" in df.columns:
+            staffs = ["すべて"] + list(df["管理取得担当者"].unique())
+            selected_staff = st.sidebar.selectbox("管理取得担当者で絞り込み", staffs)
+            if selected_staff != "すべて":
+                df = df[df["管理取得担当者"] == selected_staff]
+
+        # データテーブルの表示
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("データが空です。")
 else:
-    st.info("現在表示できるデータがありません。")
+    st.warning("⚠️ 期待したデータ形式で取得できませんでした。")
