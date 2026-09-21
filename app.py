@@ -129,10 +129,11 @@ if mode == "📋 一覧表示・管理":
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
 
+      # 🌟 括弧の不一致を完全に修正した安全な記述
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
+        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -154,7 +155,7 @@ if mode == "📋 一覧表示・管理":
         valid_titles = [s["title"] for s in target_schema]
         columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
         
-        # 🌟 重複している列名を排除してユニークなリストにする
+        # 重複している列名を排除してユニークなリストにする
         seen = set()
         unique_columns_to_show = []
         for c in columns_to_show:
@@ -387,7 +388,7 @@ elif mode == "➕ 新規物件追加":
                   f"{title} (日付)",
                   value=date.today(),
                   key=f"date_{unique_key}",
-                  label_inputValue="collapsed",
+                  label_visibility="collapsed",
               )
               new_payload[title] = chosen_date.strftime("%Y/%m/%d")
           elif len(options) > 0:
