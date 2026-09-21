@@ -82,7 +82,7 @@ def parse_fixed_date(val):
       pass
 
   v_str = str(val).strip()
-  if v_str in ["-", "", "未選択", "nan", "None", "未定"]:
+  if v_str in ["-", "", "未選択", "nan", "None", "未定", "未"]:
     return None
 
   if v_str.isdigit():
@@ -133,10 +133,11 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
         st.markdown("以下の内容で変更を保存します。内容を確認してください。")
     st.markdown("---")
     
+    # 🌟 勝手に「済」に置き換える迷惑な処理を削除し、入力された値をそのまま保持する
     validated_payload = {}
     for k, v in edited_payload.items():
         if v is None or str(v).strip() == "":
-            validated_payload[k] = "済"
+            validated_payload[k] = "未"
         else:
             validated_payload[k] = v
 
@@ -146,7 +147,8 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
             with cols[0]:
                 st.markdown(f"**{k}**")
             with cols[1]:
-                st.markdown(f"<span style='color: #4caf50;'>**{val}**</span>", unsafe_allow_html=True)
+                color_code = "#ffeb3b" if val == "未" else "#00bcd4"
+                st.markdown(f"<span style='color: {color_code};'>**{val}**</span>", unsafe_allow_html=True)
             st.markdown("")
     else:
         diff_items = []
@@ -424,7 +426,6 @@ if mode == "📋 引き継ぎ書・管理":
             with target_col:
               label_col, status_col = st.columns([2, 1])
               with label_col:
-                # 🌟 未判定：黄色、済判定：水色に変更
                 is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
                 if is_mi_form:
                   st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
@@ -587,16 +588,37 @@ elif mode == "🏁 管理終了案件":
           u_key = f"new_kanryo_{i}_{title}"
 
           with f_cols[i % 4]:
-            st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+            label_col, status_col = st.columns([2, 1])
+            with label_col:
+              st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+            with status_col:
+              status_choice = st.radio(
+                  f"状態_{u_key}",
+                  ["未", "済"],
+                  index=0,
+                  horizontal=True,
+                  key=f"status_{u_key}",
+                  label_visibility="collapsed"
+              )
+
             if "日" in title or "月" in title:
-              chosen_d = st.date_input(title, value=date.today(), key=f"date_{u_key}", label_visibility="collapsed")
-              new_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              if status_choice == "未":
+                new_payload[title] = "未定"
+              else:
+                chosen_d = st.date_input(title, value=date.today(), key=f"date_{u_key}", label_visibility="collapsed")
+                new_payload[title] = chosen_d.strftime("%Y/%m/%d")
             elif len(opts) > 0:
-              val = st.selectbox(title, opts, key=f"sel_{u_key}", label_visibility="collapsed")
-              new_payload[title] = val
+              if status_choice == "未":
+                new_payload[title] = "未"
+              else:
+                val = st.selectbox(title, opts, key=f"sel_{u_key}", label_visibility="collapsed")
+                new_payload[title] = val
             else:
-              txt = st.text_input(title, placeholder="入力", key=f"txt_{u_key}", label_visibility="collapsed")
-              new_payload[title] = txt.strip()
+              if status_choice == "未":
+                new_payload[title] = "未"
+              else:
+                txt = st.text_input(title, placeholder="入力", key=f"txt_{u_key}", label_visibility="collapsed")
+                new_payload[title] = txt.strip()
         st.markdown("---")
 
       if new_save_btn:
@@ -643,7 +665,6 @@ elif mode == "🏁 管理終了案件":
           with f_cols[i % 4]:
             label_col, status_col = st.columns([2, 1])
             with label_col:
-              # 🌟 未判定：黄色、済判定：水色に変更
               is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"]
               if is_mi_form:
                 st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
@@ -776,16 +797,37 @@ elif mode == "🔄 オーナーチェンジ案件":
           u_key = f"new_oc_{i}_{title}"
 
           with f_cols[i % 4]:
-            st.markdown(f"<span style='font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+            label_col, status_col = st.columns([2, 1])
+            with label_col:
+              st.markdown(f"<span style='color: #ffeb3b; font-size: 0.9em;'>**{title}**</span>", unsafe_allow_html=True)
+            with status_col:
+              status_choice = st.radio(
+                  f"状態_{u_key}",
+                  ["未", "済"],
+                  index=0,
+                  horizontal=True,
+                  key=f"status_{u_key}",
+                  label_visibility="collapsed"
+              )
+
             if "日" in title or "月" in title:
-              chosen_d = st.date_input(title, value=date.today(), key=f"date_{u_key}", label_visibility="collapsed")
-              new_payload[title] = chosen_d.strftime("%Y/%m/%d")
+              if status_choice == "未":
+                new_payload[title] = "未定"
+              else:
+                chosen_d = st.date_input(title, value=date.today(), key=f"date_{u_key}", label_visibility="collapsed")
+                new_payload[title] = chosen_d.strftime("%Y/%m/%d")
             elif len(opts) > 0:
-              val = st.selectbox(title, opts, key=f"sel_{u_key}", label_visibility="collapsed")
-              new_payload[title] = val
+              if status_choice == "未":
+                new_payload[title] = "未"
+              else:
+                val = st.selectbox(title, opts, key=f"sel_{u_key}", label_visibility="collapsed")
+                new_payload[title] = val
             else:
-              txt = st.text_input(title, placeholder="入力", key=f"txt_{u_key}", label_visibility="collapsed")
-              new_payload[title] = txt.strip()
+              if status_choice == "未":
+                new_payload[title] = "未"
+              else:
+                txt = st.text_input(title, placeholder="入力", key=f"txt_{u_key}", label_visibility="collapsed")
+                new_payload[title] = txt.strip()
         st.markdown("---")
 
       if new_save_btn:
