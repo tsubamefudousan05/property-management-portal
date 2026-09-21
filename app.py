@@ -143,7 +143,7 @@ if mode == "📋 一覧表示・管理":
 
         df_display = pd.DataFrame(display_data)
 
-        # 🌟 ダークモードで見やすい配色（背景：暗い黄土色、文字：明るい黄色）に修正
+        # テーブル側の「未」ハイライト
         def highlight_mi(val):
           if str(val).strip() == "未":
             return "background-color: #594500; color: #ffeb3b;"
@@ -232,7 +232,13 @@ if mode == "📋 一覧表示・管理":
               with target_col:
                 label_col, status_col = st.columns([2, 1])
                 with label_col:
-                  st.markdown(f"**{title}**")
+                  # 🌟 フォーム側の未入力項目タイトルを黄色くハイライト
+                  is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
+                  if is_mi_form:
+                    st.markdown(f"<span style='color: #ffeb3b;'>**{title}**</span>", unsafe_allow_html=True)
+                  else:
+                    st.markdown(f"**{title}**")
+
                 with status_col:
                   current_status = "済" if str(raw_val).strip() not in ["", "-", "未選択", "None", "nan", "未"] else "未"
                   status_choice = st.radio(
