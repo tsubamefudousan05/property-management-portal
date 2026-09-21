@@ -28,14 +28,13 @@ def check_password():
             st.error("パスワードが間違っています。")
     return False
 
-# 認証チェック（ここでストップさせる）
+# 認証チェック
 if not check_password():
     st.stop()
 
 # ==========================================
 # 🏠 メインアプリケーション
 # ==========================================
-# デプロイしたGASのURL
 GAS_URL = "https://script.google.com/macros/s/AKfycbzADsde-SbZ_tmc4_p2lM7HjRLiuCqyDfD6v_deho-siZKQOhky8UC_OldMtLTxJ2PG/exec"
 
 
@@ -122,7 +121,7 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 表示・編集フィルター選択")
     
-    # 独立した2つの軸（部署選択 ＆ 入力状態選択）でAND条件で絞り込むスタイル
+    # 🌟 部署フィルター ＆ 2択の進捗フィルター（すべて / 未入力のみ表示）
     col_f1, col_f2 = st.columns(2)
     with col_f1:
       filter_dep = st.selectbox(
@@ -133,14 +132,13 @@ if mode == "📋 一覧表示・管理":
     with col_f2:
       filter_status = st.selectbox(
           "📌 進捗フィルター",
-          ["すべて", "入力済みのみ", "未入力あり"],
+          ["すべて", "未入力のみ表示"],
           key="filter_status_select"
       )
 
-    # AND条件によるスマートな絞り込み
+    # フィルター適用ロジック
     filtered_data = []
     for row in data:
-      match_dep = True
       target_dep_name = None
       if filter_dep == "1課":
         target_dep_name = "1課"
@@ -148,11 +146,9 @@ if mode == "📋 一覧表示・管理":
         target_dep_name = "2課"
 
       match_status = True
-      if target_dep_name and filter_status != "すべて":
+      if target_dep_name and filter_status == "未入力のみ表示":
         completed = is_department_completed(row, target_dep_name, schema)
-        if filter_status == "入力済みのみ" and not completed:
-          match_status = False
-        elif filter_status == "未入力あり" and completed:
+        if completed:  # すでに完了しているものは除外
           match_status = False
 
       if match_status:
