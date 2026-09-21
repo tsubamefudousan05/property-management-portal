@@ -132,7 +132,7 @@ if mode == "📋 一覧表示・管理":
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
+        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -153,10 +153,17 @@ if mode == "📋 一覧表示・管理":
 
         valid_titles = [s["title"] for s in target_schema]
         columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
-        existing_cols = [c for c in columns_to_show if c in df_display.columns]
-        df_display_filtered = df_display[existing_cols]
+        
+        # 🌟 重複している列名を排除してユニークなリストにする
+        seen = set()
+        unique_columns_to_show = []
+        for c in columns_to_show:
+          if c not in seen and c in df_display.columns:
+            seen.add(c)
+            unique_columns_to_show.append(c)
 
-        # 🌟 エラーの起きる .style を廃止し、純粋で高速な dataframe 表示に切り替え
+        df_display_filtered = df_display[unique_columns_to_show]
+
         event = st.dataframe(
             df_display_filtered,
             use_container_width=True,
@@ -380,7 +387,7 @@ elif mode == "➕ 新規物件追加":
                   f"{title} (日付)",
                   value=date.today(),
                   key=f"date_{unique_key}",
-                  label_visibility="collapsed",
+                  label_inputValue="collapsed",
               )
               new_payload[title] = chosen_date.strftime("%Y/%m/%d")
           elif len(options) > 0:
@@ -395,7 +402,7 @@ elif mode == "➕ 新規物件追加":
                   key=f"rad_{unique_key}",
                   horizontal=True,
                   label_visibility="collapsed",
-                )
+              )
               new_payload[title] = chosen_radio
           else:
             if status_choice == "未":
