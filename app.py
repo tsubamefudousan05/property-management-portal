@@ -6,6 +6,9 @@ import streamlit as st
 
 st.set_page_config(page_title="管理替え・進行管理ポータル", layout="wide")
 
+# 🌟 キャッシュを完全にクリアして常に最新データを取得する
+st.cache_data.clear()
+
 # ==========================================
 # 🔐 簡易ログイン認証
 # ==========================================
@@ -39,10 +42,8 @@ if not check_password():
 GAS_URL = "https://script.google.com/macros/s/AKfycbzADsde-SbZ_tmc4_p2lM7HjRLiuCqyDfD6v_deho-siZKQOhky8UC_OldMtLTxJ2PG/exec"
 
 
-@st.cache_data(ttl=300)
 def fetch_data(sheet_name="引き継ぎ書"):
   try:
-    # シート名を指定してデータを取得できるようにURLにパラメータを付与
     url = f"{GAS_URL}?sheet={sheet_name}"
     res = requests.get(url)
     return res.json()
@@ -102,6 +103,16 @@ def parse_fixed_date(val):
   return None
 
 
+# 🌟 表記揺れやスペースに関わらず、安全に物件名を抽出するヘルパー関数
+def get_safe_property_name(row):
+  for k, v in row.items():
+    if "物件" in str(k) and k != "_rowId":
+      val = str(v).strip()
+      if val and val not in ["nan", "None", "", "未"]:
+        return val
+  return "（物件名未設定）"
+
+
 # 🌟 保存確認用のモーダルダイアログ
 @st.dialog("📋 変更内容の確認")
 def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row, sheet_name="引き継ぎ書"):
@@ -157,7 +168,6 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_r
               res = requests.post(GAS_URL, json=payload)
               if res.status_code == 200:
                 st.success("正常に更新されました！")
-                st.cache_data.clear()
                 st.rerun()
               else:
                 st.error("更新に失敗しました。")
@@ -194,7 +204,7 @@ if mode == "📋 引き継ぎ書・管理":
       property_options = ["未選択（物件を選んでください）"]
       property_map = {}
       for row in sorted_filtered_data:
-        p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
+        p_name = get_safe_property_name(row)
         raw_date = row.get("集金開始月", "")
         parsed_d = parse_fixed_date(raw_date)
         date_str = parsed_d.strftime("%Y/%m/%d") if parsed_d else (str(raw_date) if raw_date else "日付未設定")
@@ -209,7 +219,7 @@ if mode == "📋 引き継ぎ書・管理":
           key="direct_property_select_hiki"
       )
 
-      available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+      available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
       dep_options = ["すべて（総合）"] + available_depts
 
       filter_dep = st.selectbox(
@@ -241,7 +251,7 @@ if mode == "📋 引き継ぎ書・管理":
       df_display = pd.DataFrame(display_data)
 
       valid_titles = [s["title"] for s in target_schema]
-      columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
+      columns_to_show = ["_rowId"] + [t for t in df_display.columns if t != "_rowId"]
       
       seen = set()
       unique_columns_to_show = []
@@ -266,9 +276,7 @@ if mode == "📋 引き継ぎ書・管理":
     else:
       target_row = property_map[selected_prop_label]
       selected_row_id = target_row["_rowId"]
-      property_name = str(target_row.get("物件名称", "")).strip()
-      if not property_name:
-        property_name = "（物件名未設定）"
+      property_name = get_safe_property_name(target_row)
 
       head_col1, head_col3 = st.columns([4, 1])
 
@@ -391,7 +399,6 @@ elif mode == "🏁 管理終了案件":
 
   st.subheader("🏁 管理終了案件 管理モード")
   if data:
-    # 物件名 + 終了日（なければ終了予定日、それもなければ未定）でソート・ラベル作成
     def get_kanryo_sort_key(row):
       d = parse_fixed_date(row.get("終了日", "")) or parse_fixed_date(row.get("終了予定日", ""))
       if d:
@@ -403,7 +410,7 @@ elif mode == "🏁 管理終了案件":
     prop_map = {}
 
     for row in sorted_data:
-      p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
+      p_name = get_safe_property_name(row)
       end_d = parse_fixed_date(row.get("終了日", ""))
       if not end_d:
         end_d = parse_fixed_date(row.get("終了予定日", ""))
@@ -420,7 +427,7 @@ elif mode == "🏁 管理終了案件":
     if selected_label != "未選択（物件を選んでください）":
       target_row = prop_map[selected_label]
       row_id = target_row["_rowId"]
-      p_name = str(target_row.get("物件名称", "")).strip()
+      p_name = get_safe_property_name(target_row)
 
       with col_s2:
         st.markdown(f"**選択中**: {p_name} (行番号: {row_id})")
@@ -428,7 +435,6 @@ elif mode == "🏁 管理終了案件":
 
       with st.container(height=500):
         edited_payload = {}
-        # 管理終了シートの項目を4列で展開
         grouped = {}
         for s in schema:
           g = s.get("group", "基本情報")
@@ -436,7 +442,6 @@ elif mode == "🏁 管理終了案件":
             grouped[g] = []
           grouped[g].append(s)
 
-        # スキーマがない場合はデータのキーから自動生成
         if not schema:
           items = [{"title": k, "options": [], "group": "基本情報"} for k in target_row.keys() if k != "_rowId"]
           grouped = {"基本情報": items}
@@ -485,7 +490,6 @@ elif mode == "🔄 オーナーチェンジ案件":
 
   st.subheader("🔄 オーナーチェンジ案件 管理モード")
   if data:
-    # 物件名 + 決済日（もしくは未定）でソート・ラベル作成
     def get_oc_sort_key(row):
       d = parse_fixed_date(row.get("決済日", ""))
       if d:
@@ -497,7 +501,7 @@ elif mode == "🔄 オーナーチェンジ案件":
     prop_map = {}
 
     for row in sorted_data:
-      p_name = str(row.get("物件名称", "（物件名未設定）")).strip()
+      p_name = get_safe_property_name(row)
       pay_d = parse_fixed_date(row.get("決済日", ""))
       date_str = pay_d.strftime("%Y/%m/%d") if pay_d else "未定"
       
@@ -512,7 +516,7 @@ elif mode == "🔄 オーナーチェンジ案件":
     if selected_label != "未選択（物件を選んでください）":
       target_row = prop_map[selected_label]
       row_id = target_row["_rowId"]
-      p_name = str(target_row.get("物件名称", "")).strip()
+      p_name = get_safe_property_name(target_row)
 
       with col_s2:
         st.markdown(f"**選択中**: {p_name} (行番号: {row_id})")
@@ -571,7 +575,6 @@ elif mode == "🔄 オーナーチェンジ案件":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
   st.info("※現在「引き継ぎ書」への新規追加機能が有効です。")
-  # (既存の新規物件追加ロジックをここに維持)
 
 
 # ==========================================
@@ -579,4 +582,4 @@ elif mode == "➕ 新規物件追加":
 # ==========================================
 elif mode == "⚙️ 部署別・進捗ステータスビュー":
   st.subheader("⚙️ 部署別・進捗ステータス確認モード")
-  st.info("※「📋 引き継ぎ書・管理」タブ側のフィルター機能に統合されました。")
+  st.info("※サイドの機能は一覧画面に統合されました。")
