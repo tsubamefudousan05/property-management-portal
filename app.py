@@ -30,7 +30,6 @@ def check_password():
                 st.error("パスワードが間違っています。")
     return False
 
-# 認証チェック
 if not check_password():
     st.stop()
 
@@ -57,7 +56,6 @@ data = response_data.get("data", [])
 
 st.title("🏠 管理替え・進行管理ポータル")
 
-# 操作モードの切替
 mode = st.radio(
     "操作モード",
     ["📋 一覧表示・管理", "➕ 新規物件追加", "⚙️ 部署別・進捗ステータスビュー"],
@@ -65,11 +63,9 @@ mode = st.radio(
 )
 
 
-# 日付を安全にパースする関数
 def parse_fixed_date(val):
   if val is None:
     return None
-
   if isinstance(val, (int, float)):
     if val < 10000:
       return None
@@ -109,11 +105,66 @@ def parse_fixed_date(val):
   return None
 
 
+# 🌟 保存確認用のモーダルダイアログ
+@st.dialog("📋 変更内容の確認")
+def show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row):
+    st.markdown(f"## 🏠 {property_name}")
+    st.markdown(f"**対象行番号**: {selected_row_id}")
+    st.markdown("---")
+    st.markdown("以下の内容で変更を保存します。内容を確認してください。")
+
+    # 変更前と変更後を比較してリスト化
+    diff_items = []
+    for k, new_v in edited_payload.items():
+        old_v = str(target_row.get(k, "")).strip()
+        if old_v in ["", "-", "未選択", "None", "nan"]:
+            old_v = "未"
+        if new_v != old_v:
+            diff_items.append({"title": k, "old": old_v, "new": new_v})
+
+    if diff_items:
+        st.markdown("### 🔍 変更される項目")
+        for item in diff_items:
+            cols = st.columns([2, 3, 3])
+            with cols[0]:
+                st.markdown(f"**{item['title']}**")
+            with cols[1]:
+                st.markdown(f"変更前: <span style='color: #ff9800;'>{item['old']}</span>", unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f"変更後: <span style='color: #4caf50;'>**{item['new']}**</span>", unsafe_allow_html=True)
+            st.markdown("")
+    else:
+        st.info("変更された項目はありません。")
+
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("❌ キャンセル", use_container_width=True):
+            st.rerun()
+    with c2:
+        if st.button("🚀 この内容で保存する", type="primary", use_container_width=True):
+            payload = {
+                "action": "update",
+                "rowId": selected_row_id,
+                "payload": edited_payload,
+            }
+            try:
+              res = requests.post(GAS_URL, json=payload)
+              if res.status_code == 200:
+                st.success("正常に更新されました！")
+                st.cache_data.clear()
+                st.rerun()
+              else:
+                st.error("更新に失敗しました。")
+            except Exception as e:
+              st.error(f"通信エラー: {e}")
+
+
 if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
     dep_options = ["すべて（総合）"] + available_depts
 
     filter_dep = st.selectbox(
@@ -129,11 +180,10 @@ if mode == "📋 一覧表示・管理":
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
 
-      # 🌟 括弧の不一致を完全に修正した安全な記述
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
+        target_schema = [s for s in schema if s.get("department"] == filter_dep or s.get("department"] == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -155,7 +205,6 @@ if mode == "📋 一覧表示・管理":
         valid_titles = [s["title"] for s in target_schema]
         columns_to_show = ["_rowId", "物件名称"] + [t for t in valid_titles if t != "物件名称" and t in df_display.columns]
         
-        # 重複している列名を排除してユニークなリストにする
         seen = set()
         unique_columns_to_show = []
         for c in columns_to_show:
@@ -305,22 +354,10 @@ if mode == "📋 一覧表示・管理":
 
             st.markdown("---")
 
+          # 🌟 保存ボタンが押されたらダイアログを起動する
           if top_save_clicked:
-            payload = {
-                "action": "update",
-                "rowId": selected_row_id,
-                "payload": edited_payload,
-            }
-            try:
-              res = requests.post(GAS_URL, json=payload)
-              if res.status_code == 200:
-                st.success("正常に更新されました！")
-                st.cache_data.clear()
-                st.rerun()
-              else:
-                st.error("更新に失敗しました。")
-            except Exception as e:
-              st.error(f"通信エラー: {e}")
+            show_confirm_dialog(property_name, selected_row_id, edited_payload, target_row)
+
     else:
       st.info("条件に一致する物件はありません。")
   else:
@@ -329,7 +366,7 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
-  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
   add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
 
   add_dep = st.radio(
@@ -340,7 +377,7 @@ elif mode == "➕ 新規物件追加":
   )
 
   target_schema = [
-      s for s in schema if s.get("department") == add_dep or s.get("department") == "総合"
+      s for s in schema if s.get("department") == add_dep or s.get("department"] == "総合"
   ]
 
   new_save_clicked = st.button(
