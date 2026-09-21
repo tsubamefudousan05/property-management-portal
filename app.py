@@ -129,10 +129,11 @@ if mode == "📋 一覧表示・管理":
     if filtered_data:
       col_list, col_form = st.columns([3, 7])
 
+      # 🌟 括弧のエラーを完全に解消した安全な記述
       if filter_dep == "すべて（総合）":
         target_schema = schema
       else:
-        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department"] == "総合"]
+        target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
 
       with col_list:
         st.subheader(f"📊 対象データ一覧（全 {len(filtered_data)} 件）")
@@ -156,7 +157,6 @@ if mode == "📋 一覧表示・管理":
         existing_cols = [c for c in columns_to_show if c in df_display.columns]
         df_display_filtered = df_display[existing_cols]
 
-        # 🌟 エラー防止のため一度すべての列を文字列型に変換
         df_display_filtered = df_display_filtered.astype(str)
 
         def highlight_mi(val):
