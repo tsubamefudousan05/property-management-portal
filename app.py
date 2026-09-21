@@ -17,15 +17,18 @@ def check_password():
     if st.session_state.authenticated:
         return True
 
-    st.markdown("### 🔒 ログイン認証")
-    password = st.text_input("パスワードを入力してください", type="password")
-    
-    if st.button("ログイン"):
-        if password == "PM77":
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("パスワードが間違っています。")
+    # ログイン画面をコンパクトに中央配置
+    _, col_center, _ = st.columns([1, 2, 1])
+    with col_center:
+        st.markdown("### 🔒 ログイン認証")
+        password = st.text_input("パスワードを入力してください", type="password")
+        
+        if st.button("ログイン", use_container_width=True):
+            if password == "PM77":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("パスワードが間違っています。")
     return False
 
 # 認証チェック
@@ -111,10 +114,13 @@ if mode == "📋 一覧表示・管理":
   if data:
     st.markdown("### 🔍 部署フィルター選択")
     
-    # 部署フィルター
+    # 🌟 スキーマから存在する部署名を自動抽出してセレクトボックスの選択肢を作成
+    available_depts = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department") != "総合")))
+    dep_options = ["すべて（総合）"] + available_depts
+
     filter_dep = st.selectbox(
         "📂 表示する部署を選択",
-        ["すべて（総合）", "1課", "2課"],
+        dep_options,
         key="filter_dep_select"
     )
 
@@ -199,12 +205,11 @@ if mode == "📋 一覧表示・管理":
               "💾 変更を保存", type="primary", use_container_width=True
           )
 
-        if filter_dep == "1課":
-          target_schema = [s for s in schema if s["department"] == "1課" or s["department"] == "総合"]
-        elif filter_dep == "2課":
-          target_schema = [s for s in schema if s["department"] == "2課" or s["department"] == "総合"]
-        else:
+        # 🌟 選択された部署に合致するスキーマ（＋総合）を動的に抽出
+        if filter_dep == "すべて（総合）":
           target_schema = schema
+        else:
+          target_schema = [s for s in schema if s.get("department") == filter_dep or s.get("department") == "総合"]
 
         form_version_key = f"row_{selected_row_id}_dep_{filter_dep}"
 
@@ -232,7 +237,6 @@ if mode == "📋 一覧表示・管理":
               with target_col:
                 label_col, status_col = st.columns([2, 1])
                 with label_col:
-                  # 🌟 フォーム側の未入力項目タイトルを黄色くハイライト
                   is_mi_form = str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未"]
                   if is_mi_form:
                     st.markdown(f"<span style='color: #ffeb3b;'>**{title}**</span>", unsafe_allow_html=True)
@@ -326,15 +330,19 @@ if mode == "📋 一覧表示・管理":
 elif mode == "➕ 新規物件追加":
   st.subheader("➕ 新規物件の追加登録")
 
+  # 🌟 新規追加側の部署選択も動的に生成
+  available_depts_add = sorted(list(set(s.get("department", "") for s in schema if s.get("department") and s.get("department"] != "総合")))
+  add_dep_options = available_depts_add + ["総合"] if available_depts_add else ["総合"]
+
   add_dep = st.radio(
       "登録する担当課ビューを切り替え",
-      ["1課", "2課", "総合"],
+      add_dep_options,
       horizontal=True,
       key="add_dep_radio",
   )
 
   target_schema = [
-      s for s in schema if s["department"] == add_dep or s["department"] == "総合"
+      s for s in schema if s.get("department") == add_dep or s.get("department"] == "総合"
   ]
 
   new_save_clicked = st.button(
