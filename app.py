@@ -67,11 +67,10 @@ st.subheader("📋 物件・進行管理一覧")
 raw_data = load_data()
 
 if raw_data is not None and "data" in raw_data:
-    # "data" キーの中身を取り出してDataFrameに変換
     df = pd.DataFrame(raw_data["data"])
     
     if not df.empty:
-        # ステータスや担当者などのフィルター機能（必要に応じて）
+        # 管理取得担当者での絞り込み
         if "管理取得担当者" in df.columns:
             staffs = ["すべて"] + list(df["管理取得担当者"].unique())
             selected_staff = st.sidebar.selectbox("管理取得担当者で絞り込み", staffs)
@@ -84,3 +83,26 @@ if raw_data is not None and "data" in raw_data:
         st.info("データが空です。")
 else:
     st.warning("⚠️ 期待したデータ形式で取得できませんでした。")
+
+# --- 入力フォームエリア ---
+st.markdown("---")
+st.subheader("➕ 新規物件・進行データの登録")
+
+with st.form("property_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        property_name = st.text_input("物件名称")
+        property_kana = st.text_input("物件名称フリガナ")
+        acquisition_staff = st.text_input("管理取得担当者")
+    with col2:
+        old_company = st.text_input("旧管理会社名称")
+        old_contact = st.text_input("旧管理会社連絡先")
+        
+    submitted = st.form_submit_button("登録する")
+    
+    if submitted:
+        # ここにGASへデータを送信する処理を繋げることができます
+        if property_name:
+            st.success(f"「{property_name}」のデータを送信しました！（※GAS側のPOST処理と連携できます）")
+        else:
+            st.warning("物件名称を入力してください。")
