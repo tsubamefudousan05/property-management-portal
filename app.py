@@ -45,7 +45,7 @@ if not check_password():
 # 🛠️ 共通ヘルパー関数
 # ==========================================
 def fetch_data(sheet_name="引き継ぎ書"):
-    """GASからデータを取得する（デフォルトは引き継ぎ書）"""
+    """GASからデータを取得する"""
     try:
         url = f"{GAS_URL}?sheet={sheet_name}"
         res = requests.get(url)
@@ -270,8 +270,12 @@ with col_selectors:
     else:
         filter_dep = "すべて（総合）"
 
-# スキーマの絞り込み（入力フォーム用＆テーブル列表示用）
-target_schema = [s for s in schema if filter_dep == "すべて（総合）" or s.get("department", "") in [filter_dep, "総合"]]
+# 🌟 スキーマの絞り込み（ここで「進捗管理」を完全に除外！）
+target_schema = [
+    s for s in schema 
+    if (filter_dep == "すべて（総合）" or s.get("department", "") in [filter_dep, "総合"])
+    and str(s.get("group", "")).strip() != "進捗管理"
+]
 valid_titles = [s["title"] for s in target_schema]
 
 with col_table:
