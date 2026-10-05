@@ -6,7 +6,7 @@ import requests
 import streamlit as st
 
 # ==========================================
-# ⚙️️ ページ設定と初期化
+# ⚙️ ページ設定と初期化
 # ==========================================
 st.set_page_config(page_title="管理替え・進行管理ポータル", layout="wide")
 
@@ -270,25 +270,13 @@ with col_selectors:
     else:
         filter_dep = "すべて（総合）"
 
-
-# 🌟 スキーマの絞り込み（ここで「1課」の「進捗管理」だけを除外して3課・4課は残す！）
-target_schema = []
-for s in schema:
-    g = str(s.get("group", "")).strip()
-    d = str(s.get("department", "")).strip()
-    
-    # 部署プルダウンでのフィルター
-    if filter_dep != "すべて（総合）" and d not in [filter_dep, "総合"]:
-        continue
-        
-    # 別画面用（1課の進捗管理）だけを非表示にする
-    if g == "進捗管理" and d == "1課":
-        continue
-        
-    target_schema.append(s)
-
+# スキーマの絞り込み（入力フォーム用＆テーブル列表示用）
+# ※特殊な除外処理は行わず、選択された部署のみでシンプルに絞り込む
+target_schema = [
+    s for s in schema 
+    if filter_dep == "すべて（総合）" or s.get("department", "") in [filter_dep, "総合"]
+]
 valid_titles = [s["title"] for s in target_schema]
-
 
 with col_table:
     st.markdown(f"### 📊 対象データ一覧（全 {len(data)} 件）")
