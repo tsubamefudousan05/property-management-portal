@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 import io
 import json
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageOps
 import requests
 import streamlit as st
 
@@ -58,7 +58,6 @@ def fetch_data(sheet_name="引き継ぎ書"):
 
 
 def parse_fixed_date(val):
-  """GAS/スプレッドシートの日付シリアル値、ISO文字列、日付文字列を date 型に正規化"""
   if val is None:
     return None
   v_str = str(val).strip()
@@ -83,8 +82,67 @@ def parse_fixed_date(val):
   return None
 
 
+def get_safe_property_name(row):
+  for k, v in row.items():
+    if "物件" in str(k) and k != "_rowId":
+      val = str(v).strip()
+      if val and val not in ["nan", "None", "", "未"]:
+        return val
+  return "（物件名未設定）"
+
+
+# ==========================================
+# 📸 画像圧縮＆Google Driveアップロード関数
+# ==========================================
+def resize_and_compress_image(
+    uploaded_file, max_length=1600, quality=80
+) -> str:
+  """画像を長辺最大1600pxにリサイズし、EXIF向き補正＆JPEG圧縮してBase64を返す"""
+  img = Image.open(uploaded_file)
+
+  # スマホの向き(EXIF)を自動補正
+  try:
+    img = ImageOps.exif_transpose(img)
+  except Exception:
+    pass
+
+  if img.mode in ("RGBA", "P"):
+    img = img.convert("RGB")
+
+  # リサイズ（長辺が max_length を超える場合のみ縮小）
+  img.thumbnail((max_length, max_length), Image.Resampling.LANCZOS)
+
+  buf = io.BytesIO()
+  img.save(buf, format="JPEG", quality=quality, optimize=True)
+  return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def upload_single_photo_to_gas(uploaded_file, property_name):
+  """1枚の写真を圧縮してGASへ送信し、物件フォルダへ格納"""
+  try:
+    b64_str = resize_and_compress_image(uploaded_file)
+    payload = {
+        "action": "upload_image",
+        "fileData": b64_str,
+        "fileName": uploaded_file.name,
+        "propertyName": property_name,
+    }
+    res = requests.post(GAS_URL, json=payload, timeout=30)
+    res_json = res.json()
+    if res_json.get("status") == "success":
+      return {
+          "file_url": res_json.get("fileUrl"),
+          "folder_url": res_json.get("folderUrl"),
+      }
+    else:
+      st.error(f"GASエラー: {res_json.get('message')}")
+  except Exception as e:
+    st.error(f"アップロード通信エラー ({uploaded_file.name}): {e}")
+  return None
+
+
 def get_or_create_drive_folder(property_name):
-  """物件名フォルダの作成または取得（URL返却）"""
+  """物件フォルダの作成またはURL取得"""
   try:
     payload = {
         "action": "get_or_create_folder",
@@ -94,20 +152,9 @@ def get_or_create_drive_folder(property_name):
     res_json = res.json()
     if res_json.get("status") == "success":
       return res_json.get("folderUrl")
-    else:
-      st.error(f"フォルダ作成エラー: {res_json.get('message')}")
   except Exception as e:
     st.error(f"フォルダ通信エラー: {e}")
   return None
-
-
-def get_safe_property_name(row):
-  for k, v in row.items():
-    if "物件" in str(k) and k != "_rowId":
-      val = str(v).strip()
-      if val and val not in ["nan", "None", "", "未"]:
-        return val
-  return "（物件名未設定）"
 
 
 # ==========================================
@@ -134,7 +181,6 @@ def show_confirm_dialog(
     st.markdown("以下の内容で変更を保存します。内容を確認してください。")
   st.markdown("---")
 
-  # 差分判定
   diff_items = []
   final_payload_preview = {}
 
@@ -142,12 +188,22 @@ def show_confirm_dialog(
     val_to_save = "未" if (new_v is None or str(new_v).strip() == "") else new_v
     final_payload_preview[k] = val_to_save
 
-    if is_new:
+    # 写真ファイルが選択されている場合の表示
+    if k in uploaded_files_dict and uploaded_files_dict[k]:
+      num_files = len(uploaded_files_dict[k])
+      diff_items.append({
+          "title": k,
+          "old": str(target_row.get(k, "未")).strip(),
+          "new": (
+              f"📸 写真 {num_files} 枚を物件フォルダへアップロードしてリンク更新"
+          ),
+      })
+    elif is_new:
       diff_items.append({"title": k, "old": "未", "new": val_to_save})
     else:
       old_raw = target_row.get(k, "未")
 
-      # 日付項目は正規化して比較（ISO形式とYYYY/MM/DDの不一致防止）
+      # 日付項目の正規化比較（ISO表記揺れの抑止）
       if "日" in k or "月" in k:
         old_d = parse_fixed_date(old_raw)
         new_d = parse_fixed_date(new_v)
@@ -200,6 +256,25 @@ def show_confirm_dialog(
     action_type = "save" if is_new else "update"
     btn_label = "🚀 新規登録する" if is_new else "🚀 保存する"
     if st.button(btn_label, type="primary", use_container_width=True):
+
+      # 🌟 写真のアップロードを実行
+      for k, files_list in uploaded_files_dict.items():
+        if files_list:
+          folder_url_obtained = None
+          for f_item in files_list:
+            with st.spinner(
+                f"写真「{f_item.name}」をリサイズ・アップロード中..."
+            ):
+              res_up = upload_single_photo_to_gas(
+                  f_item, property_name=property_name
+              )
+              if res_up and res_up.get("folder_url"):
+                folder_url_obtained = res_up.get("folder_url")
+
+          # 物件フォルダのURLをシートに書き込む値としてセット
+          if folder_url_obtained:
+            final_payload_preview[k] = folder_url_obtained
+
       payload = {
           "action": action_type,
           "sheet": sheet_name,
@@ -210,7 +285,7 @@ def show_confirm_dialog(
 
       with st.spinner("スプレッドシートへ書き込み中..."):
         try:
-          res = requests.post(GAS_URL, json=payload, timeout=20)
+          res = requests.post(GAS_URL, json=payload, timeout=25)
           if res.status_code == 200 and res.json().get("status") == "success":
             st.success("正常に保存されました！")
             st.rerun()
@@ -442,7 +517,7 @@ with right_col:
                   "未定" if ("日" in title or "月" in title) else "未"
               )
             else:
-              # 📸 写真・画像・フォルダ項目（フォルダURL管理）
+              # 📸 写真・画像・フォルダ項目
               if "写真" in title or "画像" in title or "添付" in title:
                 current_url = str(raw_val).strip() if not is_new else ""
 
@@ -452,39 +527,26 @@ with right_col:
                       " style='display:inline-block; padding:4px 8px;"
                       " background-color:#1e3a5f; color:#90caf9;"
                       " border-radius:4px; text-decoration:none;"
-                      " font-size:0.85em; margin-bottom:4px;'>📂 Google"
-                      " Driveでフォルダを開く</a>",
+                      " font-size:0.85em; margin-bottom:6px;'>📂 Google"
+                      " Driveで物件フォルダを開く</a>",
                       unsafe_allow_html=True,
                   )
 
-                c_btn, c_txt = st.columns([1.2, 1.8])
-                with c_btn:
-                  if st.button(
-                      "📁 フォルダ作成/取得",
-                      key=f"btn_f_{unique_key}",
-                      use_container_width=True,
-                  ):
-                    with st.spinner("Driveフォルダを確認・作成中..."):
-                      created_f_url = get_or_create_drive_folder(property_name)
-                      if created_f_url:
-                        st.session_state[f"folder_url_{unique_key}"] = (
-                            created_f_url
-                        )
-                        st.success("フォルダを準備しました！")
-                        st.rerun()
-
-                folder_val = st.session_state.get(
-                    f"folder_url_{unique_key}", current_url
+                # 複数ファイル選択可能なアップローダー
+                chosen_files = st.file_uploader(
+                    f"{title}（複数枚可）",
+                    type=["jpg", "jpeg", "png", "heic"],
+                    accept_multiple_files=True,
+                    key=f"file_{unique_key}",
+                    label_visibility="collapsed",
                 )
-                with c_txt:
-                  input_url = st.text_input(
-                      title,
-                      value=folder_val,
-                      placeholder="フォルダURL",
-                      key=f"url_{unique_key}",
-                      label_visibility="collapsed",
-                  )
-                  edited_payload[title] = input_url.strip()
+
+                if chosen_files:
+                  uploaded_files_dict[title] = chosen_files
+                  edited_payload[title] = current_url
+                else:
+                  uploaded_files_dict[title] = []
+                  edited_payload[title] = current_url if not is_new else "未"
 
               # 📅 日付項目
               elif "日" in title or "月" in title:
