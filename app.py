@@ -9,8 +9,6 @@ import streamlit as st
 # ⚙️ ページ設定と初期化
 # ==========================================
 st.set_page_config(page_title="管理替え・進行管理ポータル", layout="wide")
-
-# 常に最新データを取得するためキャッシュをクリア
 st.cache_data.clear()
 
 GAS_URL = "https://script.google.com/macros/s/AKfycbzADsde-SbZ_tmc4_p2lM7HjRLiuCqyDfD6v_deho-siZKQOhky8UC_OldMtLTxJ2PG/exec"
@@ -45,7 +43,6 @@ if not check_password():
 # 🛠️ 共通ヘルパー関数
 # ==========================================
 def fetch_data(sheet_name="引き継ぎ書"):
-    """GASからデータを取得する"""
     try:
         url = f"{GAS_URL}?sheet={sheet_name}"
         res = requests.get(url)
@@ -55,7 +52,6 @@ def fetch_data(sheet_name="引き継ぎ書"):
         return {"schema": [], "headers": [], "data": []}
 
 def upload_image_to_gas(uploaded_file):
-    """画像をBase64化してGASへアップロードし、URLを取得する"""
     try:
         bytes_data = uploaded_file.getvalue()
         b64_str = base64.b64encode(bytes_data).decode("utf-8")
@@ -74,15 +70,11 @@ def upload_image_to_gas(uploaded_file):
     return None
 
 def parse_fixed_date(val):
-    """GASやExcel特有のシリアル値、ISO文字列、日付文字列を安全にdate型に変換"""
     if val is None:
         return None
-    
     v_str = str(val).strip()
     if v_str in ["", "-", "未選択", "None", "nan", "未定", "未"]:
         return None
-
-    # シリアル値（数値）の処理
     if isinstance(val, (int, float)) or v_str.replace('.', '', 1).isdigit():
         try:
             val_float = float(v_str)
@@ -90,8 +82,6 @@ def parse_fixed_date(val):
                 return date(1899, 12, 30) + timedelta(days=int(val_float))
         except Exception:
             pass
-
-    # 文字列の処理
     try:
         if "T" in v_str:
             dt = datetime.fromisoformat(v_str.replace("Z", ""))
@@ -101,11 +91,9 @@ def parse_fixed_date(val):
             return date(int(parts[0]), int(parts[1]), int(parts[2]))
     except Exception:
         pass
-    
     return None
 
 def get_safe_property_name(row):
-    """物件名称を安全に抽出する"""
     for k, v in row.items():
         if "物件" in str(k) and k != "_rowId":
             val = str(v).strip()
@@ -127,7 +115,6 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, uploaded
         st.markdown("以下の内容で変更を保存します。内容を確認してください。")
     st.markdown("---")
     
-    # 添付ファイルのアップロード処理
     final_payload = {}
     for k, v in edited_payload.items():
         if k in uploaded_files_dict and uploaded_files_dict[k] is not None:
@@ -137,7 +124,6 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, uploaded
         else:
             final_payload[k] = "未" if (v is None or str(v).strip() == "") else v
 
-    # 差分の表示
     if is_new:
         for k, val in final_payload.items():
             cols = st.columns([2, 4])
@@ -192,7 +178,7 @@ def show_confirm_dialog(property_name, selected_row_id, edited_payload, uploaded
                 st.error(f"通信エラー: {e}")
 
 # ==========================================
-# 🏠 メインUI構成（モード共通処理）
+# 🏠 メインUI構成
 # ==========================================
 col_title, col_reload = st.columns([5, 1])
 with col_title:
@@ -209,7 +195,6 @@ mode = st.radio(
     horizontal=True,
 )
 
-# モードに応じたシート名とソート基準日キーの設定
 mode_config = {
     "📋 引き継ぎ書・管理": {"sheet": "引き継ぎ書", "date_keys": ["集金開始月"]},
     "🏁 管理終了案件": {"sheet": "管理終了", "date_keys": ["終了日", "終了予定日"]},
@@ -219,7 +204,6 @@ mode_config = {
 target_sheet = mode_config[mode]["sheet"]
 date_keys = mode_config[mode]["date_keys"]
 
-# データ取得
 response_data = fetch_data(target_sheet)
 schema = response_data.get("schema", [])
 data = response_data.get("data", [])
@@ -228,7 +212,6 @@ if not data and not schema:
     st.info("データがありません。")
     st.stop()
 
-# データのソート
 def get_sort_key(row):
     for key in date_keys:
         d = parse_fixed_date(row.get(key, ""))
@@ -241,41 +224,40 @@ col_selectors, col_table = st.columns([4, 6])
 
 with col_selectors:
     st.markdown("### 🔍 検索・フィルター選択")
-    
-    # 物件選択プルダウンの作成
     property_options = ["未選択（物件を選んでください）", "➕ 【新規物件を追加する】"]
     property_map = {}
     
     for row in sorted_data:
         p_name = get_safe_property_name(row)
-        
-        # ソート基準の日付を取得してラベルに表示
         display_date_str = "日付未設定"
         for key in date_keys:
             d = parse_fixed_date(row.get(key, ""))
             if d:
                 display_date_str = d.strftime("%Y/%m/%d")
                 break
-                
         label = f"{p_name} （{date_keys[0]}: {display_date_str}）"
         property_options.append(label)
         property_map[label] = row
 
     selected_prop_label = st.selectbox("🏠 物件を選択（日付順）", property_options, key="select_prop")
 
-    # 部署選択プルダウン（存在する場合のみ表示）
     available_depts = sorted(list(set(str(s.get("department", "")).strip() for s in schema if s.get("department") and str(s.get("department")) != "総合")))
     if available_depts:
         filter_dep = st.selectbox("📂 部署を選択", ["すべて（総合）"] + available_depts, key="select_dep")
     else:
         filter_dep = "すべて（総合）"
 
-# スキーマの絞り込み（入力フォーム用＆テーブル列表示用）
-# ※特殊な除外処理は行わず、選択された部署のみでシンプルに絞り込む
-target_schema = [
-    s for s in schema 
-    if filter_dep == "すべて（総合）" or s.get("department", "") in [filter_dep, "総合"]
-]
+target_schema = []
+for s in schema:
+    g = str(s.get("group", "")).strip()
+    d = str(s.get("department", "")).strip()
+    if filter_dep != "すべて（総合）" and d not in [filter_dep, "総合"]:
+        continue
+    # 「1課」の「進捗管理」は別画面用なので入力フォームから除外
+    if g == "進捗管理" and d == "1課":
+        continue
+    target_schema.append(s)
+
 valid_titles = [s["title"] for s in target_schema]
 
 with col_table:
@@ -285,27 +267,22 @@ with col_table:
         for row in data:
             new_row = row.copy()
             for k, v in new_row.items():
-                # 日付項目を見やすく変換
                 if ("日" in k or "月" in k) and v:
                     fixed_date = parse_fixed_date(v)
                     if fixed_date:
                         new_row[k] = fixed_date.strftime("%Y/%m/%d")
-                
-                # 空白を「未」に統一
                 if k != "_rowId" and (v is None or str(v).strip() in ["", "-", "未選択", "None", "nan"]):
                     new_row[k] = "未"
             display_data.append(new_row)
 
         df_display = pd.DataFrame(display_data)
-        
-        # 選択した部署に関連する列（＋_rowId）のみを抽出して表示
         columns_to_show = ["_rowId"] + [c for c in df_display.columns if c in valid_titles and c != "_rowId"]
         st.dataframe(df_display[columns_to_show], use_container_width=True, height=250, hide_index=True)
 
 st.markdown("---")
 
 # ==========================================
-# 📝 動的フォームの生成（新規・編集共通）
+# 📝 動的フォームの生成
 # ==========================================
 if selected_prop_label == "未選択（物件を選んでください）":
     st.info("👆 上のセレクトボックスから物件を選択、または「➕ 【新規物件を追加する】」を選択してください。")
@@ -330,13 +307,11 @@ else:
         edited_payload = {}
         uploaded_files_dict = {}
 
-        # スキーマをグループごとに分類
         grouped_items = {}
         for s in target_schema:
             g = s.get("group", "基本情報")
             grouped_items.setdefault(g, []).append(s)
 
-        # グループごとにUIを生成
         for group_name, items in grouped_items.items():
             st.markdown(f"### 📌 【 {group_name} 】")
             form_cols = st.columns(4)
@@ -346,14 +321,11 @@ else:
                 options = s.get("options", [])
                 raw_val = target_row.get(title, "") if not is_new else ""
                 
-                # キーの一意性を担保
-                row_key_part = "new" if is_new else str(selected_row_id)
-                unique_key = f"{target_sheet}_{row_key_part}_{group_name}_{i}_{title}"
+                unique_key = f"{target_sheet}_{'new' if is_new else str(selected_row_id)}_{group_name}_{i}_{title}"
 
                 with form_cols[i % 4]:
                     label_col, status_col = st.columns([2, 1])
                     
-                    # 空欄・未入力の判定
                     is_mi_form = True if is_new else (str(raw_val).strip() in ["", "-", "未選択", "None", "nan", "未", "未定"])
                     
                     with label_col:
@@ -367,15 +339,12 @@ else:
                             horizontal=True, key=f"status_{unique_key}", label_visibility="collapsed"
                         )
 
-                    # 状態が「未」の場合は無条件で未定にする
                     if status_choice == "未":
                         edited_payload[title] = "未定" if ("日" in title or "月" in title) else "未"
                     else:
-                        # 📸 写真・画像・添付項目の場合
                         if "写真" in title or "画像" in title or "添付" in title:
                             if not is_new and raw_val and str(raw_val).startswith("http"):
                                 st.markdown(f"<a href='{raw_val}' target='_blank'>🔗 現在のファイルを開く</a>", unsafe_allow_html=True)
-                            
                             uploaded_file = st.file_uploader(f"{title}", type=["jpg", "jpeg", "png", "heic"], key=f"file_{unique_key}", label_visibility="collapsed")
                             if uploaded_file:
                                 uploaded_files_dict[title] = uploaded_file
@@ -383,14 +352,13 @@ else:
                             else:
                                 edited_payload[title] = raw_val if not is_new else "未"
                         
-                        # 📅 日付項目の場合
                         elif "日" in title or "月" in title:
                             parsed_d = parse_fixed_date(raw_val) if not is_new else None
                             d_default = parsed_d if parsed_d else date.today()
                             chosen_date = st.date_input(title, value=d_default, key=f"date_{unique_key}", label_visibility="collapsed")
                             edited_payload[title] = chosen_date.strftime("%Y/%m/%d")
                         
-                        # 🔘 選択式（ラジオ・セレクト）項目の場合
+                        # 🌟 選択肢がある場合は「プルダウン（Selectbox）」で表示
                         elif len(options) > 0:
                             current_val = str(raw_val).strip() if not is_new else ""
                             if current_val in ["-", "", "未選択", "未"] and options:
@@ -400,10 +368,15 @@ else:
                             except ValueError:
                                 default_idx = 0
                                 
-                            chosen_radio = st.radio(title, options, index=default_idx, key=f"rad_{unique_key}", horizontal=True, label_visibility="collapsed")
-                            edited_payload[title] = chosen_radio
+                            chosen_select = st.selectbox(
+                                title, 
+                                options, 
+                                index=default_idx, 
+                                key=f"sel_{unique_key}", 
+                                label_visibility="collapsed"
+                            )
+                            edited_payload[title] = chosen_select
                         
-                        # ✍️ 自由記述項目の場合
                         else:
                             txt_val = str(raw_val).strip() if not is_new and not is_mi_form else ""
                             typed_val = st.text_input(title, value=txt_val, placeholder="入力", key=f"txt_{unique_key}", label_visibility="collapsed")
@@ -411,9 +384,7 @@ else:
                             
             st.markdown("---")
 
-    # 保存ボタンが押されたときの処理
     if save_clicked:
-        # 新規の場合、物件名が入力されていればそれを名前にする
         if is_new:
             for k, v in edited_payload.items():
                 if "物件" in k and v and v != "未":
