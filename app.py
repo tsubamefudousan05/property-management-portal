@@ -55,7 +55,8 @@ def fetch_data(sheet_name="引き継ぎ書"):
     return {"schema": [], "headers": [], "data": []}
 
 
-def upload_image_to_gas(uploaded_file):
+def upload_image_to_gas(uploaded_file, property_name):
+  """画像を物件名フォルダにアップロードし、ファイルURLとフォルダURLを取得"""
   try:
     bytes_data = uploaded_file.getvalue()
     b64_str = base64.b64encode(bytes_data).decode("utf-8")
@@ -64,11 +65,15 @@ def upload_image_to_gas(uploaded_file):
         "fileData": b64_str,
         "fileName": uploaded_file.name,
         "mimeType": uploaded_file.type,
+        "propertyName": property_name,
     }
     res = requests.post(GAS_URL, json=payload)
     res_json = res.json()
     if res_json.get("status") == "success":
-      return res_json.get("url")
+      return {
+          "file_url": res_json.get("url"),
+          "folder_url": res_json.get("folderUrl"),
+      }
   except Exception as e:
     st.error(f"画像アップロードエラー: {e}")
   return None
@@ -135,9 +140,20 @@ def show_confirm_dialog(
   final_payload = {}
   for k, v in edited_payload.items():
     if k in uploaded_files_dict and uploaded_files_dict[k] is not None:
-      with st.spinner(f"「{k}」の写真をアップロード中..."):
-        file_url = upload_image_to_gas(uploaded_files_dict[k])
-        final_payload[k] = file_url if file_url else v
+      with st.spinner(f"「{k}」をGoogle Driveへ保存中..."):
+        upload_res = upload_image_to_gas(
+            uploaded_files_dict[k], property_name=property_name
+        )
+        if upload_res:
+          # 現場写真などには物件フォルダのURLを保存してDriveで一覧できるようにする
+          if "フォルダ" in k or "現場写真" in k:
+            final_payload[k] = (
+                upload_res.get("folder_url") or upload_res.get("file_url") or v
+            )
+          else:
+            final_payload[k] = upload_res.get("file_url") or v
+        else:
+          final_payload[k] = v
     else:
       final_payload[k] = "未" if (v is None or str(v).strip() == "") else v
 
@@ -149,7 +165,7 @@ def show_confirm_dialog(
       with cols[1]:
         if "http" in str(val):
           st.markdown(
-              f"<a href='{val}' target='_blank'>🔗 添付ファイルを開く</a>",
+              f"<a href='{val}' target='_blank'>🔗 Driveで開く</a>",
               unsafe_allow_html=True,
           )
         else:
@@ -325,7 +341,6 @@ with left_col:
   else:
     filter_dep = "すべて（総合）"
 
-  # スキーマの絞り込み
   target_schema = [
       s
       for s in schema
@@ -336,7 +351,6 @@ with left_col:
 
   st.markdown("---")
 
-  # 左側下部：対象データ一覧
   st.markdown(f"### 📊 対象データ一覧（全 {len(data)} 件）")
   if data:
     display_data = []
@@ -401,7 +415,6 @@ with right_col:
 
       for group_name, items in grouped_items.items():
         st.markdown(f"### 📌 【 {group_name} 】")
-        # 右カラム幅に合わせて2列配置
         form_cols = st.columns(2)
 
         for i, s in enumerate(items):
@@ -448,11 +461,20 @@ with right_col:
                   "未定" if ("日" in title or "月" in title) else "未"
               )
             else:
+              # 📸 写真・画像・添付項目の場合（Driveフォルダリンク表示＋アップローダー）
               if "写真" in title or "画像" in title or "添付" in title:
                 if not is_new and raw_val and str(raw_val).startswith("http"):
+                  btn_text = (
+                      "📂 Google Driveで物件写真フォルダを開く"
+                      if "folders" in str(raw_val)
+                      else "🔗 保存済みファイルを開く"
+                  )
                   st.markdown(
-                      f"<a href='{raw_val}' target='_blank'>🔗"
-                      " 現在のファイルを開く</a>",
+                      f"<a href='{raw_val}' target='_blank'"
+                      " style='display:inline-block; padding:4px 8px;"
+                      " background-color:#1e3a5f; color:#90caf9;"
+                      " border-radius:4px; text-decoration:none;"
+                      f" font-size:0.85em; margin-bottom:4px;'>{btn_text}</a>",
                       unsafe_allow_html=True,
                   )
                 uploaded_file = st.file_uploader(
@@ -467,6 +489,7 @@ with right_col:
                 else:
                   edited_payload[title] = raw_val if not is_new else "未"
 
+              # 📅 日付項目
               elif "日" in title or "月" in title:
                 parsed_d = parse_fixed_date(raw_val) if not is_new else None
                 d_default = parsed_d if parsed_d else date.today()
@@ -478,6 +501,7 @@ with right_col:
                 )
                 edited_payload[title] = chosen_date.strftime("%Y/%m/%d")
 
+              # 🔘 選択肢がある項目（プルダウン）
               elif len(options) > 0:
                 select_choices = ["未"] + [
                     opt for opt in options if opt != "未"
@@ -500,6 +524,7 @@ with right_col:
                 )
                 edited_payload[title] = chosen_select
 
+              # ✍️ 自由記述テキスト項目
               else:
                 txt_val = (
                     str(raw_val).strip()
