@@ -1,7 +1,9 @@
 import base64
 from datetime import date, datetime, timedelta
+import io
 import json
 import pandas as pd
+from PIL import Image
 import requests
 import streamlit as st
 
@@ -48,34 +50,56 @@ if not check_password():
 def fetch_data(sheet_name="引き継ぎ書"):
   try:
     url = f"{GAS_URL}?sheet={sheet_name}"
-    res = requests.get(url)
+    res = requests.get(url, timeout=20)
     return res.json()
   except Exception as e:
     st.error(f"データ取得エラー ({sheet_name}): {e}")
     return {"schema": [], "headers": [], "data": []}
 
 
-def upload_image_to_gas(uploaded_file, property_name):
-  """画像を物件名フォルダにアップロードし、ファイルURLとフォルダURLを取得"""
+def compress_and_encode_image(uploaded_file, max_size=(1600, 1600), quality=85):
+  """大きな写真（スマホ写真等）を高速送信できるように自動圧縮してBase64化"""
   try:
-    bytes_data = uploaded_file.getvalue()
-    b64_str = base64.b64encode(bytes_data).decode("utf-8")
+    img = Image.open(uploaded_file)
+    # スマホの向き情報(EXIF)を維持しつつRGBに変換
+    if img.mode in ("RGBA", "P"):
+      img = img.convert("RGB")
+    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=quality, optimize=True)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+  except Exception:
+    # 圧縮に失敗した場合は生データをそのままBase64化
+    return base64.b64encode(uploaded_file.getvalue()).decode("utf-8")
+
+
+def upload_image_to_gas(uploaded_file, property_name):
+  """画像を物件名フォルダにアップロードし、結果を返す"""
+  try:
+    b64_str = compress_and_encode_image(uploaded_file)
     payload = {
         "action": "upload_image",
         "fileData": b64_str,
-        "fileName": uploaded_file.name,
-        "mimeType": uploaded_file.type,
+        "fileName": (
+            uploaded_file.name
+            if uploaded_file.name.lower().endswith(".jpg")
+            else f"{uploaded_file.name}.jpg"
+        ),
+        "mimeType": "image/jpeg",
         "propertyName": property_name,
     }
-    res = requests.post(GAS_URL, json=payload)
+    res = requests.post(GAS_URL, json=payload, timeout=30)
     res_json = res.json()
     if res_json.get("status") == "success":
       return {
           "file_url": res_json.get("url"),
           "folder_url": res_json.get("folderUrl"),
       }
+    else:
+      st.error(f"GASエラー: {res_json.get('message')}")
   except Exception as e:
-    st.error(f"画像アップロードエラー: {e}")
+    st.error(f"画像アップロード通信エラー: {e}")
   return None
 
 
@@ -134,83 +158,55 @@ def show_confirm_dialog(
   else:
     st.markdown(f"## 🏠 {property_name}")
     st.markdown(f"**対象行番号**: {selected_row_id}")
-    st.markdown("以下の内容で変更を保存します。内容を確認してください。")
+    st.markdown("以下の内容で変更を保存します。内容を確認してください.")
   st.markdown("---")
 
-  final_payload = {}
-  for k, v in edited_payload.items():
+  # 変更項目のプレビュー表示
+  diff_items = []
+  for k, new_v in edited_payload.items():
     if k in uploaded_files_dict and uploaded_files_dict[k] is not None:
-      with st.spinner(f"「{k}」をGoogle Driveへ保存中..."):
-        upload_res = upload_image_to_gas(
-            uploaded_files_dict[k], property_name=property_name
-        )
-        if upload_res:
-          # 現場写真などには物件フォルダのURLを保存してDriveで一覧できるようにする
-          if "フォルダ" in k or "現場写真" in k:
-            final_payload[k] = (
-                upload_res.get("folder_url") or upload_res.get("file_url") or v
-            )
-          else:
-            final_payload[k] = upload_res.get("file_url") or v
-        else:
-          final_payload[k] = v
-    else:
-      final_payload[k] = "未" if (v is None or str(v).strip() == "") else v
+      diff_items.append({
+          "title": k,
+          "old": str(target_row.get(k, "未")).strip(),
+          "new": f"📸 新しい写真（{uploaded_files_dict[k].name}）をアップロード予定",
+      })
+    elif is_new or str(new_v) != str(target_row.get(k, "未")).strip():
+      diff_items.append({
+          "title": k,
+          "old": str(target_row.get(k, "未")).strip(),
+          "new": "未" if (new_v is None or str(new_v).strip() == "") else new_v,
+      })
 
-  if is_new:
-    for k, val in final_payload.items():
-      cols = st.columns([2, 4])
+  if diff_items:
+    st.markdown("### 🔍 変更・登録される項目")
+    for item in diff_items:
+      old_v = (
+          "未"
+          if item["old"] in ["", "-", "未選択", "None", "nan"]
+          else item["old"]
+      )
+      cols = st.columns([2, 3, 3])
       with cols[0]:
-        st.markdown(f"**{k}**")
+        st.markdown(f"**{item['title']}**")
       with cols[1]:
-        if "http" in str(val):
-          st.markdown(
-              f"<a href='{val}' target='_blank'>🔗 Driveで開く</a>",
-              unsafe_allow_html=True,
-          )
-        else:
-          color_code = "#ffeb3b" if val == "未" else "#00bcd4"
-          st.markdown(
-              f"<span style='color: {color_code};'>**{val}**</span>",
-              unsafe_allow_html=True,
-          )
-      st.markdown("")
-  else:
-    diff_items = [
-        {"title": k, "old": str(target_row.get(k, "未")).strip(), "new": new_v}
-        for k, new_v in final_payload.items()
-        if str(new_v) != str(target_row.get(k, "未")).strip()
-    ]
-
-    if diff_items:
-      st.markdown("### 🔍 変更される項目")
-      for item in diff_items:
-        old_v = (
-            "未"
-            if item["old"] in ["", "-", "未選択", "None", "nan"]
-            else item["old"]
-        )
-        cols = st.columns([2, 3, 3])
-        with cols[0]:
-          st.markdown(f"**{item['title']}**")
-        with cols[1]:
+        if not is_new:
           st.markdown(
               f"変更前: <span style='color: #ff9800;'>{old_v}</span>",
               unsafe_allow_html=True,
           )
-        with cols[2]:
-          val_display = (
-              f"<a href='{item['new']}' target='_blank'>🔗 リンク</a>"
-              if "http" in str(item["new"])
-              else f"**{item['new']}**"
-          )
-          st.markdown(
-              f"変更後: <span style='color: #4caf50;'>{val_display}</span>",
-              unsafe_allow_html=True,
-          )
-        st.markdown("")
-    else:
-      st.info("変更された項目はありません。")
+      with cols[2]:
+        val_display = (
+            f"<a href='{item['new']}' target='_blank'>🔗 リンク</a>"
+            if "http" in str(item["new"])
+            else f"**{item['new']}**"
+        )
+        st.markdown(
+            f"変更後: <span style='color: #4caf50;'>{val_display}</span>",
+            unsafe_allow_html=True,
+        )
+      st.markdown("")
+  else:
+    st.info("変更された項目はありません。")
 
   st.markdown("---")
   c1, c2 = st.columns(2)
@@ -221,6 +217,27 @@ def show_confirm_dialog(
     action_type = "save" if is_new else "update"
     btn_label = "🚀 新規登録する" if is_new else "🚀 保存する"
     if st.button(btn_label, type="primary", use_container_width=True):
+      # 🌟 ここで初めて画像のアップロードを実行（安全・確実）
+      final_payload = {}
+      for k, v in edited_payload.items():
+        if k in uploaded_files_dict and uploaded_files_dict[k] is not None:
+          with st.spinner(f"「{k}」をGoogle Driveへアップロード中..."):
+            upload_res = upload_image_to_gas(
+                uploaded_files_dict[k], property_name=property_name
+            )
+            if upload_res:
+              # 物件フォルダのURLを優先して保存
+              folder_link = (
+                  upload_res.get("folder_url")
+                  or upload_res.get("file_url")
+                  or "未"
+              )
+              final_payload[k] = folder_link
+            else:
+              final_payload[k] = target_row.get(k, "未")
+        else:
+          final_payload[k] = "未" if (v is None or str(v).strip() == "") else v
+
       payload = {
           "action": action_type,
           "sheet": sheet_name,
@@ -228,15 +245,17 @@ def show_confirm_dialog(
       }
       if not is_new:
         payload["rowId"] = selected_row_id
-      try:
-        res = requests.post(GAS_URL, json=payload)
-        if res.status_code == 200:
-          st.success("正常に処理されました！")
-          st.rerun()
-        else:
-          st.error("処理に失敗しました。")
-      except Exception as e:
-        st.error(f"通信エラー: {e}")
+
+      with st.spinner("スプレッドシートへ書き込み中..."):
+        try:
+          res = requests.post(GAS_URL, json=payload, timeout=20)
+          if res.status_code == 200 and res.json().get("status") == "success":
+            st.success("正常に保存されました！")
+            st.rerun()
+          else:
+            st.error(f"保存に失敗しました: {res.text}")
+        except Exception as e:
+          st.error(f"通信エラー: {e}")
 
 
 # ==========================================
@@ -296,13 +315,10 @@ def get_sort_key(row):
 sorted_data = sorted(data, key=get_sort_key)
 
 # ==========================================
-# 📐 メインレイアウト：左右分割（左側: 4.5 / 右側: 5.5）
+# 📐 メインレイアウト：左右分割
 # ==========================================
 left_col, right_col = st.columns([4.5, 5.5], gap="large")
 
-# ------------------------------------------
-# 👈 左側：上部（検索・フィルター）＋ 下部（対象データ一覧）
-# ------------------------------------------
 with left_col:
   st.markdown("### 🔍 検索・フィルター選択")
 
@@ -378,9 +394,6 @@ with left_col:
         hide_index=True,
     )
 
-# ------------------------------------------
-# 👉 右側：入力・編集フォーム
-# ------------------------------------------
 with right_col:
   if selected_prop_label == "未選択（物件を選んでください）":
     st.info("👈 左側のセレクトボックスから物件を選択してください。")
@@ -461,7 +474,7 @@ with right_col:
                   "未定" if ("日" in title or "月" in title) else "未"
               )
             else:
-              # 📸 写真・画像・添付項目の場合（Driveフォルダリンク表示＋アップローダー）
+              # 📸 写真・画像・添付項目
               if "写真" in title or "画像" in title or "添付" in title:
                 if not is_new and raw_val and str(raw_val).startswith("http"):
                   btn_text = (
@@ -501,7 +514,7 @@ with right_col:
                 )
                 edited_payload[title] = chosen_date.strftime("%Y/%m/%d")
 
-              # 🔘 選択肢がある項目（プルダウン）
+              # 🔘 プルダウン項目
               elif len(options) > 0:
                 select_choices = ["未"] + [
                     opt for opt in options if opt != "未"
@@ -524,7 +537,7 @@ with right_col:
                 )
                 edited_payload[title] = chosen_select
 
-              # ✍️ 自由記述テキスト項目
+              # ✍️ テキスト項目
               else:
                 txt_val = (
                     str(raw_val).strip()
